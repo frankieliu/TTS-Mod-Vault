@@ -17,6 +17,7 @@ import 'package:tts_mod_vault/src/state/backup/backup_state.dart'
         BackupStatusEnum,
         FilepathsIsolateData;
 import 'package:tts_mod_vault/src/state/backup/models/backup_file_metadata.dart';
+import 'package:tts_mod_vault/src/state/backup/models/backup_file_info.dart';
 import 'package:tts_mod_vault/src/state/backup/models/existing_backup_model.dart'
     show ExistingBackup;
 import 'package:tts_mod_vault/src/state/bulk_actions/bulk_actions_state.dart'
@@ -132,8 +133,19 @@ class BackupNotifier extends StateNotifier<BackupState> {
 
             // Save backup file metadata
             if (message.fileMetadata != null) {
-              final metadata =
-                  BackupFileMetadata(files: message.fileMetadata!);
+              // Convert Map<String, int> to Map<String, BackupFileInfo>
+              final timestamp = DateTime.now().millisecondsSinceEpoch;
+              final filesMap = message.fileMetadata!.map(
+                (filename, size) => MapEntry(
+                  p.basenameWithoutExtension(filename),
+                  BackupFileInfo(
+                    size: size,
+                    crc32: 0, // Will be updated when metadata is extracted from ZIP
+                    backedUpAt: timestamp,
+                  ),
+                ),
+              );
+              final metadata = BackupFileMetadata(files: filesMap);
               await ref
                   .read(storageProvider)
                   .saveBackupFileMetadata(backupFileName, metadata);
