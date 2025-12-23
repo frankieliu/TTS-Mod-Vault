@@ -10,6 +10,7 @@ import 'package:path/path.dart' as path;
 import 'package:tts_mod_vault/src/state/backup/existing_backups_state.dart'
     show ExistingBackupsState;
 import 'package:tts_mod_vault/src/state/backup/models/backup_file_metadata.dart';
+import 'package:tts_mod_vault/src/state/backup/models/backup_file_info.dart';
 import 'package:tts_mod_vault/src/state/backup/models/existing_backup_model.dart'
     show ExistingBackup;
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart'
@@ -329,13 +330,20 @@ Future<List<(ExistingBackup, BackupFileMetadata?)>> _processBackupFiles(
         final bytes = await file.readAsBytes();
         final archive = ZipDecoder().decodeBytes(bytes);
 
-        final Map<String, int> filesMap = {};
+        // Use backup file's last modified time as the backed up timestamp
+        final backupTimestamp = stat.modified.millisecondsSinceEpoch;
+
+        final Map<String, BackupFileInfo> filesMap = {};
         for (final zipFile in archive.files) {
           if (!zipFile.isFile) continue;
           // Use basename WITHOUT extension for consistency with ExistingAssetsListsState
           final name = path.basenameWithoutExtension(zipFile.name);
           if (name.isNotEmpty) {
-            filesMap[name] = zipFile.size;
+            filesMap[name] = BackupFileInfo(
+              size: zipFile.size,
+              crc32: zipFile.crc32 ?? 0, // Use 0 if CRC32 is not available
+              backedUpAt: backupTimestamp,
+            );
           }
         }
 
