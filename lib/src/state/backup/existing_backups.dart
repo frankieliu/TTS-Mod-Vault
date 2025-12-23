@@ -9,12 +9,13 @@ import 'package:hooks_riverpod/hooks_riverpod.dart' show Ref, StateNotifier;
 import 'package:path/path.dart' as path;
 import 'package:tts_mod_vault/src/state/backup/existing_backups_state.dart'
     show ExistingBackupsState;
+import 'package:tts_mod_vault/src/state/backup/models/backup_file_metadata.dart';
 import 'package:tts_mod_vault/src/state/backup/models/existing_backup_model.dart'
     show ExistingBackup;
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart'
     show Mod, ModTypeEnum;
 import 'package:tts_mod_vault/src/state/provider.dart'
-    show directoriesProvider, loadingMessageProvider, settingsProvider;
+    show directoriesProvider, loadingMessageProvider, settingsProvider, storageProvider;
 import 'package:tts_mod_vault/src/utils.dart' show getBackupFilenameByMod;
 
 class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
@@ -77,7 +78,18 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
     }
 
     final results = await Future.wait(futures);
-    final backups = results.expand((list) => list).toList();
+    final backups = results.expand((list) => list.map((r) => r.$1)).toList();
+
+    // Save file metadata to storage
+    for (final result in results) {
+      for (final (backup, metadata) in result) {
+        if (metadata != null) {
+          await ref
+              .read(storageProvider)
+              .saveBackupFileMetadata(backup.filename, metadata);
+        }
+      }
+    }
 
     state = ExistingBackupsState(backups: backups);
     debugPrint('loadExistingBackups - finished at ${DateTime.now()}');
@@ -247,25 +259,50 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
 }
 
 // Top-level function required by Isolate.run
-Future<List<ExistingBackup>> _processBackupFiles(List<File> files) async {
-  final backups = <ExistingBackup>[];
+// Returns list of (ExistingBackup, BackupFileMetadata?)
+Future<List<(ExistingBackup, BackupFileMetadata?)>> _processBackupFiles(
+    List<File> files) async {
+  final results = <(ExistingBackup, BackupFileMetadata?)>[];
 
   for (final file in files) {
     try {
       final stat = await file.stat();
       final filename = path.basename(file.path);
-      //final totalAssetCount = await listZipContents(file.path);
 
-      backups.add(ExistingBackup(
+      // Extract file metadata from zip
+      BackupFileMetadata? metadata;
+      try {
+        final bytes = await file.readAsBytes();
+        final archive = ZipDecoder().decodeBytes(bytes);
+
+        final Map<String, int> filesMap = {};
+        for (final zipFile in archive.files) {
+          if (!zipFile.isFile) continue;
+          final name = path.basename(zipFile.name);
+          if (name.isNotEmpty) {
+            filesMap[name] = zipFile.size;
+          }
+        }
+
+        if (filesMap.isNotEmpty) {
+          metadata = BackupFileMetadata(files: filesMap);
+        }
+      } catch (e) {
+        debugPrint("Error extracting metadata from $filename: $e");
+      }
+
+      final backup = ExistingBackup(
         filename: filename,
         filepath: path.normalize(file.path),
         lastModifiedTimestamp: stat.modified.millisecondsSinceEpoch ~/ 1000,
         totalAssetCount: null,
-      ));
+      );
+
+      results.add((backup, metadata));
     } catch (e) {
       debugPrint("_processBackupFiles error $e");
     }
   }
 
-  return backups;
+  return results;
 }

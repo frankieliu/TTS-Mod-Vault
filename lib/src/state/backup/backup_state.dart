@@ -51,8 +51,9 @@ class BackupProgressMessage extends BackupMessage {
 class BackupCompleteMessage extends BackupMessage {
   final bool success;
   final String message;
+  final Map<String, int>? fileMetadata; // filename -> size
 
-  BackupCompleteMessage(this.success, this.message);
+  BackupCompleteMessage(this.success, this.message, [this.fileMetadata]);
 }
 
 // Data to send to isolate

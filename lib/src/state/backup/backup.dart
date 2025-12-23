@@ -7,7 +7,7 @@ import 'package:file_picker/file_picker.dart' show FilePicker;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:hooks_riverpod/hooks_riverpod.dart' show Ref, StateNotifier;
 import 'package:path/path.dart' as p
-    show basenameWithoutExtension, join, normalize, relative;
+    show basenameWithoutExtension, basename, join, normalize, relative;
 import 'package:tts_mod_vault/src/state/backup/backup_state.dart'
     show
         BackupCompleteMessage,
@@ -16,6 +16,7 @@ import 'package:tts_mod_vault/src/state/backup/backup_state.dart'
         BackupState,
         BackupStatusEnum,
         FilepathsIsolateData;
+import 'package:tts_mod_vault/src/state/backup/models/backup_file_metadata.dart';
 import 'package:tts_mod_vault/src/state/backup/models/existing_backup_model.dart'
     show ExistingBackup;
 import 'package:tts_mod_vault/src/state/bulk_actions/bulk_actions_state.dart'
@@ -28,7 +29,8 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         bulkActionsProvider,
         directoriesProvider,
         existingBackupsProvider,
-        settingsProvider;
+        settingsProvider,
+        storageProvider;
 import 'package:tts_mod_vault/src/utils.dart'
     show
         getBackupFilenameByMod,
@@ -127,6 +129,15 @@ class BackupNotifier extends StateNotifier<BackupState> {
               totalAssetCount: totalAssetCount,
             );
             ref.read(existingBackupsProvider.notifier).addBackup(newBackup);
+
+            // Save backup file metadata
+            if (message.fileMetadata != null) {
+              final metadata =
+                  BackupFileMetadata(files: message.fileMetadata!);
+              await ref
+                  .read(storageProvider)
+                  .saveBackupFileMetadata(backupFileName, metadata);
+            }
           }
 
           if (ref.read(bulkActionsProvider).status ==
@@ -192,6 +203,9 @@ void _backupIsolate(BackupIsolateData data) async {
     final encoder = ZipFileEncoder();
     encoder.create(data.targetBackupFilePath);
 
+    // Track file metadata: filename -> size
+    final Map<String, int> fileMetadata = {};
+
     for (int i = 0; i < data.filePaths.length; i++) {
       final filePath = data.filePaths[i];
       final file = File(filePath);
@@ -210,6 +224,11 @@ void _backupIsolate(BackupIsolateData data) async {
 
         await encoder.addFile(file, relativePath);
 
+        // Record file metadata
+        final stat = await file.stat();
+        final filename = p.basename(filePath);
+        fileMetadata[filename] = stat.size;
+
         data.sendPort.send(
           BackupProgressMessage(i + 1, data.filePaths.length),
         );
@@ -223,6 +242,7 @@ void _backupIsolate(BackupIsolateData data) async {
     data.sendPort.send(BackupCompleteMessage(
       true,
       'Backup has been created at ${data.targetBackupFilePath}',
+      fileMetadata,
     ));
   } catch (e) {
     data.sendPort.send(BackupCompleteMessage(false, e.toString()));

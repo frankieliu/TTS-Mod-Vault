@@ -36,6 +36,8 @@ class IsolateWorkData {
   final Map<String, String> existingPdf;
   // Failed assets maps for O(1) lookups (url -> errorType)
   final Map<String, String> failedAssets;
+  // Backed up files set for O(1) lookups
+  final Set<String> backedUpFiles;
 
   IsolateWorkData({
     required this.batches,
@@ -48,6 +50,7 @@ class IsolateWorkData {
     required this.existingModels,
     required this.existingPdf,
     required this.failedAssets,
+    required this.backedUpFiles,
   });
 }
 
@@ -145,6 +148,7 @@ Future<IsolateWorkResult> processMultipleBatchesInIsolate(
             workData.existingPdf,
             workData.ignoreAudioAssets,
             workData.failedAssets,
+            workData.backedUpFiles,
           );
 
           final completeMod = mod.copyWith(
@@ -263,6 +267,7 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
   Map<String, String> pdf,
   bool ignoreAudio,
   Map<String, String> failedAssets,
+  Set<String> backedUpFiles,
 ) {
   // Group URLs by type
   Map<AssetTypeEnum, List<String>> urlsByType = {
@@ -311,12 +316,16 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
         );
       }
 
+      // Check if this asset is backed up
+      final isBackedUp = backedUpFiles.contains(filename); // O(1) lookup!
+
       return Asset(
         url: url,
         fileExists: filepath != null,
         filePath: filepath,
         hasFailed: hasFailed,
         errorType: errorType,
+        isBackedUp: isBackedUp,
       );
     }).toList();
 

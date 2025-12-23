@@ -181,6 +181,9 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
         (url, failedAsset) => MapEntry(url, failedAsset.errorType.name),
       );
 
+      // Get backed up files for O(1) lookups in isolate
+      final backedUpFiles = ref.read(backedUpFilesProvider);
+
       final List<IsolateWorkData> isolateWorkData =
           batchesPerIsolate.map((batches) {
         // Get all mods for this isolate to prepare relevant cached data
@@ -206,6 +209,7 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
           existingModels: existingAssets.models,
           existingPdf: existingAssets.pdf,
           failedAssets: failedAssetsMap,
+          backedUpFiles: backedUpFiles,
         );
       }).toList();
 

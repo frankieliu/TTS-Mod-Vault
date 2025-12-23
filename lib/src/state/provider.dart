@@ -62,6 +62,19 @@ final existingBackupsProvider =
   (ref) => ExistingBackupsStateNotifier(ref),
 );
 
+// Provider that aggregates all backed up filenames across all backups
+final backedUpFilesProvider = Provider<Set<String>>((ref) {
+  final storage = ref.watch(storageProvider);
+  final allBackupMetadata = storage.getAllBackupFileMetadata();
+
+  final Set<String> backedUpFiles = {};
+  for (final metadata in allBackupMetadata.values) {
+    backedUpFiles.addAll(metadata.files.keys);
+  }
+
+  return backedUpFiles;
+});
+
 final loaderProvider = Provider<LoaderNotifier>((ref) {
   return LoaderNotifier(ref);
 });

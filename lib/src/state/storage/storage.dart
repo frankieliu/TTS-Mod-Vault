@@ -3,6 +3,7 @@ import 'dart:convert' show json, jsonDecode, jsonEncode;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:hive_ce_flutter/hive_flutter.dart' show Box, Hive;
 import 'package:tts_mod_vault/src/state/asset/models/failed_asset_model.dart';
+import 'package:tts_mod_vault/src/state/backup/models/backup_file_metadata.dart';
 import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart';
 import 'package:tts_mod_vault/src/state/settings/settings_state.dart'
     show SettingsState;
@@ -13,12 +14,14 @@ class Storage {
   late Box<String> _metadataBox;
   late Box<String> _appDataBox;
   late Box<String> _failedAssetsBox;
+  late Box<String> _backupFilesBox;
 
   // Boxes
   static const String urlsBox = 'ModUrls';
   static const String metadataBox = 'ModMetadata';
   static const String appDataBox = 'AppData';
   static const String failedAssetsBox = 'FailedAssets';
+  static const String backupFilesBox = 'BackupFiles';
 
   // Keys
   static const String dateTimeStampSuffix = 'DateTimeStamp';
@@ -35,6 +38,7 @@ class Storage {
       _metadataBox = await Hive.openBox<String>(metadataBox);
       _appDataBox = await Hive.openBox<String>(appDataBox);
       _failedAssetsBox = await Hive.openBox<String>(failedAssetsBox);
+      _backupFilesBox = await Hive.openBox<String>(backupFilesBox);
 
       _initialized = true;
     }
@@ -217,5 +221,53 @@ class Storage {
     }
 
     await _failedAssetsBox.deleteAll(toDelete);
+  }
+
+  // BACKUP FILES
+  Future<void> saveBackupFileMetadata(
+      String backupFilename, BackupFileMetadata metadata) async {
+    final jsonMap = metadata.toJson();
+    final jsonStr = jsonEncode(jsonMap);
+    await _backupFilesBox.put(backupFilename, jsonStr);
+  }
+
+  BackupFileMetadata? getBackupFileMetadata(String backupFilename) {
+    final jsonStr = _backupFilesBox.get(backupFilename);
+    if (jsonStr == null) return null;
+
+    try {
+      final Map<String, dynamic> decoded = jsonDecode(jsonStr);
+      return BackupFileMetadata.fromJson(decoded);
+    } catch (e) {
+      debugPrint(
+          'Error decoding backup file metadata for $backupFilename: $e');
+      return null;
+    }
+  }
+
+  Future<void> deleteBackupFileMetadata(String backupFilename) async {
+    await _backupFilesBox.delete(backupFilename);
+  }
+
+  Map<String, BackupFileMetadata> getAllBackupFileMetadata() {
+    final Map<String, BackupFileMetadata> result = {};
+
+    for (final key in _backupFilesBox.keys) {
+      final jsonStr = _backupFilesBox.get(key);
+      if (jsonStr != null) {
+        try {
+          final decoded = jsonDecode(jsonStr);
+          result[key] = BackupFileMetadata.fromJson(decoded);
+        } catch (e) {
+          debugPrint('Error decoding backup file metadata for key $key: $e');
+        }
+      }
+    }
+
+    return result;
+  }
+
+  Future<void> clearBackupFileMetadata() async {
+    await _backupFilesBox.clear();
   }
 }

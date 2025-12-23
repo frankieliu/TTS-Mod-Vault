@@ -6,6 +6,7 @@ class Asset {
   final String? filePath;
   final bool hasFailed;
   final DownloadErrorTypeEnum? errorType;
+  final bool isBackedUp;
 
   Asset({
     required this.url,
@@ -13,5 +14,6 @@ class Asset {
     this.filePath,
     this.hasFailed = false,
     this.errorType,
+    this.isBackedUp = false,
   });
 }

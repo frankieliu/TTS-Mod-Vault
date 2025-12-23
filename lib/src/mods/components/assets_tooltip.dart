@@ -57,7 +57,25 @@ class HelpTooltip extends StatelessWidget {
             style:
                 TextStyle(fontWeight: FontWeight.bold, color: Colors.lightBlue),
           ),
-          TextSpan(text: ' - Last selected URL\n\n'),
+          TextSpan(text: ' - Last selected URL\n'),
+          WidgetSpan(
+            child: Icon(Icons.backup, size: 16, color: Colors.blue),
+          ),
+          TextSpan(
+            text: ' Blue Border',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+          ),
+          TextSpan(text: ' - Asset is backed up\n\n'),
+
+          TextSpan(
+            text: 'Note:\n',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          TextSpan(
+            text: '• Assets can be backed up even if not currently downloaded\n'
+                 '• Backup state is preserved even if URLs become invalid\n'
+                 '• Blue border indicates the asset exists in at least one backup\n\n',
+          ),
 
           // Actions
           TextSpan(
