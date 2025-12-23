@@ -15,7 +15,6 @@ class Storage {
   late Box<String> _appDataBox;
   late Box<String> _failedAssetsBox;
   late Box<String> _backupFilesBox;
-  late Box<String> _urlBackupStatusBox;
 
   // Boxes
   static const String urlsBox = 'ModUrls';
@@ -23,7 +22,6 @@ class Storage {
   static const String appDataBox = 'AppData';
   static const String failedAssetsBox = 'FailedAssets';
   static const String backupFilesBox = 'BackupFiles';
-  static const String urlBackupStatusBox = 'UrlBackupStatus';
 
   // Keys
   static const String dateTimeStampSuffix = 'DateTimeStamp';
@@ -41,7 +39,6 @@ class Storage {
       _appDataBox = await Hive.openBox<String>(appDataBox);
       _failedAssetsBox = await Hive.openBox<String>(failedAssetsBox);
       _backupFilesBox = await Hive.openBox<String>(backupFilesBox);
-      _urlBackupStatusBox = await Hive.openBox<String>(urlBackupStatusBox);
 
       _initialized = true;
     }
@@ -272,74 +269,5 @@ class Storage {
 
   Future<void> clearBackupFileMetadata() async {
     await _backupFilesBox.clear();
-  }
-
-  // URL BACKUP STATUS
-  /// Saves the backup status for a specific URL
-  ///
-  /// Data format: { "backupFilename": "ModName.ttsmod", "fileSize": 12345, "backedUpAt": "2025-12-23T10:30:00Z" }
-  Future<void> saveUrlBackupStatus(String url, Map<String, dynamic> status) async {
-    final jsonStr = jsonEncode(status);
-    await _urlBackupStatusBox.put(url, jsonStr);
-  }
-
-  /// Gets the backup status for a specific URL
-  Map<String, dynamic>? getUrlBackupStatus(String url) {
-    final jsonStr = _urlBackupStatusBox.get(url);
-    if (jsonStr == null) return null;
-
-    try {
-      return Map<String, dynamic>.from(jsonDecode(jsonStr));
-    } catch (e) {
-      debugPrint('Error decoding URL backup status for $url: $e');
-      return null;
-    }
-  }
-
-  /// Checks if a URL is backed up
-  bool isUrlBackedUp(String url) {
-    return _urlBackupStatusBox.containsKey(url);
-  }
-
-  /// Deletes backup status for a specific URL
-  Future<void> deleteUrlBackupStatus(String url) async {
-    await _urlBackupStatusBox.delete(url);
-  }
-
-  /// Gets all URLs that are backed up
-  List<String> getAllBackedUpUrls() {
-    return _urlBackupStatusBox.keys.cast<String>().toList();
-  }
-
-  /// Saves backup status for multiple URLs at once (bulk operation)
-  Future<void> saveUrlBackupStatusBulk(Map<String, Map<String, dynamic>> urlStatuses) async {
-    final Map<String, String> encoded = {};
-    for (final entry in urlStatuses.entries) {
-      encoded[entry.key] = jsonEncode(entry.value);
-    }
-    await _urlBackupStatusBox.putAll(encoded);
-  }
-
-  /// Gets backup statuses for multiple URLs at once
-  Map<String, Map<String, dynamic>> getUrlBackupStatusBulk(List<String> urls) {
-    final Map<String, Map<String, dynamic>> result = {};
-
-    for (final url in urls) {
-      final jsonStr = _urlBackupStatusBox.get(url);
-      if (jsonStr != null) {
-        try {
-          result[url] = Map<String, dynamic>.from(jsonDecode(jsonStr));
-        } catch (e) {
-          debugPrint('Error decoding URL backup status for $url: $e');
-        }
-      }
-    }
-
-    return result;
-  }
-
-  /// Clears all URL backup status data
-  Future<void> clearUrlBackupStatus() async {
-    await _urlBackupStatusBox.clear();
   }
 }

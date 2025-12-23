@@ -36,7 +36,7 @@ class IsolateWorkData {
   final Map<String, String> existingPdf;
   // Failed assets maps for O(1) lookups (url -> errorType)
   final Map<String, String> failedAssets;
-  // Backed up files set for O(1) lookups
+  // Backed up files set for O(1) lookups (now WITHOUT extensions)
   final Set<String> backedUpFiles;
 
   IsolateWorkData({
@@ -289,7 +289,6 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
 
   // Build Asset objects with O(1) lookups
   final allAssets = <List<Asset>>[];
-  int debugAssetCount = 0; // Track for debug logging (first 3 only)
 
   for (final type in AssetTypeEnum.values) {
     final assetMap = switch (type) {
@@ -317,20 +316,8 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
         );
       }
 
-      // Check if this asset is backed up
+      // Check if this asset is backed up (filename now matches - no extension!)
       final isBackedUp = backedUpFiles.contains(filename); // O(1) lookup!
-
-      // Debug: Log first 3 assets to see filename matching
-      if (debugAssetCount < 3) {
-        debugPrint(
-            'Asset #${debugAssetCount + 1}: filename="$filename", isBackedUp=$isBackedUp, backedUpFiles.length=${backedUpFiles.length}');
-        if (!isBackedUp && backedUpFiles.length > 0) {
-          // Show sample of what IS in the set
-          debugPrint(
-              '  Sample from backedUpFiles: ${backedUpFiles.take(3).join(", ")}');
-        }
-        debugAssetCount++;
-      }
 
       return Asset(
         url: url,

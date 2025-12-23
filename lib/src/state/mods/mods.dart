@@ -183,6 +183,7 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       );
 
       // Get backed up files for O(1) lookups in isolate
+      // Now contains filenames WITHOUT extensions (matches getFileNameFromURL output)
       final backedUpFiles = ref.read(backedUpFilesProvider);
 
       final List<IsolateWorkData> isolateWorkData =

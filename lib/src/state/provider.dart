@@ -64,6 +64,7 @@ final existingBackupsProvider =
 );
 
 // Provider that aggregates all backed up filenames across all backups
+// Now stores filenames WITHOUT extensions (matches getFileNameFromURL output)
 final backedUpFilesProvider = Provider<Set<String>>((ref) {
   final storage = ref.watch(storageProvider);
   final allBackupMetadata = storage.getAllBackupFileMetadata();

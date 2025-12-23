@@ -26,6 +26,12 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
   Future<void> loadExistingBackups() async {
     debugPrint('loadExistingBackups - started at ${DateTime.now()}');
 
+    // Clear old backup metadata (has filenames WITH extensions)
+    // This will force regeneration with new format (filenames WITHOUT extensions)
+    final storage = ref.read(storageProvider);
+    await storage.clearBackupFileMetadata();
+    debugPrint('Cleared old backup metadata - will regenerate with new format');
+
     final backupsDir = ref.read(directoriesProvider).backupsDir;
     final directory = Directory(backupsDir);
 
@@ -140,6 +146,7 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
     // Combine cached and extracted backups
     final allBackups = [...backupsFromCache, ...extractedBackups];
     state = ExistingBackupsState(backups: allBackups);
+
     debugPrint('loadExistingBackups - finished at ${DateTime.now()}');
   }
 
@@ -326,7 +333,8 @@ Future<List<(ExistingBackup, BackupFileMetadata?)>> _processBackupFiles(
         final Map<String, int> filesMap = {};
         for (final zipFile in archive.files) {
           if (!zipFile.isFile) continue;
-          final name = path.basename(zipFile.name);
+          // Use basename WITHOUT extension for consistency with ExistingAssetsListsState
+          final name = path.basenameWithoutExtension(zipFile.name);
           if (name.isNotEmpty) {
             filesMap[name] = zipFile.size;
           }
