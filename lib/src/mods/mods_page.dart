@@ -40,9 +40,8 @@ class ModsPage extends HookConsumerWidget {
       child: Scaffold(
         body: Stack(
           children: [
-            Expanded(
-              child: mods.when(
-                data: (data) {
+            mods.when(
+              data: (data) {
                   return Stack(
                     children: [
                       Row(
@@ -69,7 +68,6 @@ class ModsPage extends HookConsumerWidget {
                   child: MessageProgressIndicator(message: loadingMessage),
                 ),
               ),
-            ),
             ImportBackupOverlay(),
           ],
         ),
