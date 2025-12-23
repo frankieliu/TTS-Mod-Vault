@@ -3,6 +3,7 @@ import 'dart:convert' show json, jsonDecode, jsonEncode;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:hive_ce_flutter/hive_flutter.dart' show Box, Hive;
 import 'package:tts_mod_vault/src/state/asset/models/failed_asset_model.dart';
+import 'package:tts_mod_vault/src/state/asset/models/downloaded_file_info.dart';
 import 'package:tts_mod_vault/src/state/backup/models/backup_file_metadata.dart';
 import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart';
 import 'package:tts_mod_vault/src/state/settings/settings_state.dart'
@@ -15,6 +16,7 @@ class Storage {
   late Box<String> _appDataBox;
   late Box<String> _failedAssetsBox;
   late Box<String> _backupFilesBox;
+  late Box<String> _downloadedFilesBox;
 
   // Boxes
   static const String urlsBox = 'ModUrls';
@@ -22,6 +24,7 @@ class Storage {
   static const String appDataBox = 'AppData';
   static const String failedAssetsBox = 'FailedAssets';
   static const String backupFilesBox = 'BackupFiles';
+  static const String downloadedFilesBox = 'DownloadedFiles';
 
   // Keys
   static const String dateTimeStampSuffix = 'DateTimeStamp';
@@ -39,6 +42,7 @@ class Storage {
       _appDataBox = await Hive.openBox<String>(appDataBox);
       _failedAssetsBox = await Hive.openBox<String>(failedAssetsBox);
       _backupFilesBox = await Hive.openBox<String>(backupFilesBox);
+      _downloadedFilesBox = await Hive.openBox<String>(downloadedFilesBox);
 
       _initialized = true;
     }
@@ -269,5 +273,80 @@ class Storage {
 
   Future<void> clearBackupFileMetadata() async {
     await _backupFilesBox.clear();
+  }
+
+  // DOWNLOADED FILES METADATA
+  /// Saves metadata for a downloaded file
+  Future<void> saveDownloadedFileInfo(String filename, DownloadedFileInfo info) async {
+    final jsonStr = jsonEncode(info.toJson());
+    await _downloadedFilesBox.put(filename, jsonStr);
+  }
+
+  /// Gets metadata for a downloaded file
+  DownloadedFileInfo? getDownloadedFileInfo(String filename) {
+    final jsonStr = _downloadedFilesBox.get(filename);
+    if (jsonStr == null) return null;
+
+    try {
+      return DownloadedFileInfo.fromJson(jsonDecode(jsonStr));
+    } catch (e) {
+      debugPrint('Error decoding downloaded file info for $filename: $e');
+      return null;
+    }
+  }
+
+  /// Gets metadata for multiple downloaded files at once
+  Map<String, DownloadedFileInfo> getDownloadedFileInfoBulk(List<String> filenames) {
+    final Map<String, DownloadedFileInfo> result = {};
+
+    for (final filename in filenames) {
+      final jsonStr = _downloadedFilesBox.get(filename);
+      if (jsonStr != null) {
+        try {
+          result[filename] = DownloadedFileInfo.fromJson(jsonDecode(jsonStr));
+        } catch (e) {
+          debugPrint('Error decoding downloaded file info for $filename: $e');
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /// Saves metadata for multiple downloaded files at once (bulk)
+  Future<void> saveDownloadedFileInfoBulk(Map<String, DownloadedFileInfo> infos) async {
+    final Map<String, String> encoded = {};
+    for (final entry in infos.entries) {
+      encoded[entry.key] = jsonEncode(entry.value.toJson());
+    }
+    await _downloadedFilesBox.putAll(encoded);
+  }
+
+  /// Deletes metadata for a downloaded file
+  Future<void> deleteDownloadedFileInfo(String filename) async {
+    await _downloadedFilesBox.delete(filename);
+  }
+
+  /// Gets all downloaded file metadata
+  Map<String, DownloadedFileInfo> getAllDownloadedFileInfo() {
+    final Map<String, DownloadedFileInfo> result = {};
+
+    for (final key in _downloadedFilesBox.keys) {
+      final jsonStr = _downloadedFilesBox.get(key);
+      if (jsonStr != null) {
+        try {
+          result[key] = DownloadedFileInfo.fromJson(jsonDecode(jsonStr));
+        } catch (e) {
+          debugPrint('Error decoding downloaded file info for key $key: $e');
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /// Clears all downloaded file metadata
+  Future<void> clearDownloadedFileMetadata() async {
+    await _downloadedFilesBox.clear();
   }
 }

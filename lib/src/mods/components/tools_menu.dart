@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart'
     show ConsumerWidget, WidgetRef;
 import 'package:tts_mod_vault/src/mods/components/components.dart'
-    show DownloadModByIdDialog;
+    show AssetMetadataDialog, DownloadModByIdDialog;
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
         actionInProgressProvider,
@@ -95,6 +95,24 @@ class ToolsMenu extends ConsumerWidget {
             color: Colors.black,
           ),
           child: const Text('Download Workshop Mod by ID',
+              style: TextStyle(
+                color: Colors.black,
+              )),
+        ),
+        MenuItemButton(
+          style: MenuItemButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+          ),
+          onPressed: () => showDialog(
+            context: context,
+            builder: (context) => AssetMetadataDialog(),
+          ),
+          leadingIcon: const Icon(
+            Icons.info_outline,
+            color: Colors.black,
+          ),
+          child: const Text('View Asset Metadata',
               style: TextStyle(
                 color: Colors.black,
               )),

@@ -6,10 +6,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart' show Ref, StateNotifier;
 import 'package:path/path.dart' as path;
 import 'package:tts_mod_vault/src/state/asset/existing_assets_state.dart'
     show ExistingAssetsListsState;
+import 'package:tts_mod_vault/src/state/asset/models/downloaded_file_info.dart';
 import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart'
     show AssetTypeEnum;
 import 'package:path/path.dart' as p;
-import 'package:tts_mod_vault/src/state/provider.dart' show directoriesProvider;
+import 'package:tts_mod_vault/src/state/provider.dart' show directoriesProvider, storageProvider;
 import 'package:tts_mod_vault/src/utils.dart'
     show getFileNameFromURL, newSteamUserContentUrl, oldCloudUrl;
 
@@ -51,6 +52,60 @@ class ExistingAssetsNotifier extends StateNotifier<ExistingAssetsListsState> {
     );
 
     debugPrint('loadExistingAssetsLists - finished at ${DateTime.now()}');
+
+    // Populate metadata for existing files
+    await _populateExistingFileMetadata();
+  }
+
+  Future<void> _populateExistingFileMetadata() async {
+    debugPrint('_populateExistingFileMetadata - started');
+
+    final storage = ref.read(storageProvider);
+    final downloadInfoMap = <String, DownloadedFileInfo>{};
+
+    // Get all files from state
+    final allFiles = <String, String>{
+      ...state.assetBundles,
+      ...state.audio,
+      ...state.images,
+      ...state.models,
+      ...state.pdf,
+    };
+
+    debugPrint('  Checking ${allFiles.length} existing files');
+
+    int processedCount = 0;
+    int errorCount = 0;
+
+    for (final entry in allFiles.entries) {
+      final filename = entry.key;
+      final filepath = entry.value;
+
+      try {
+        final file = File(filepath);
+        if (await file.exists()) {
+          final stat = await file.stat();
+
+          downloadInfoMap[filename] = DownloadedFileInfo(
+            filepath: filepath,
+            size: stat.size,
+            crc32: 0, // Default to 0, only calculate for new downloads
+            downloadedAt: stat.modified.millisecondsSinceEpoch,
+          );
+          processedCount++;
+        }
+      } catch (e) {
+        errorCount++;
+        debugPrint('  Error reading file $filepath: $e');
+      }
+    }
+
+    // Bulk save metadata
+    if (downloadInfoMap.isNotEmpty) {
+      await storage.saveDownloadedFileInfoBulk(downloadInfoMap);
+      debugPrint(
+          '_populateExistingFileMetadata - finished: $processedCount files processed, $errorCount errors');
+    }
   }
 
   Future<void> setExistingAssetsListByType(AssetTypeEnum type) async {

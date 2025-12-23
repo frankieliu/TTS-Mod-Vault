@@ -1,10 +1,12 @@
 import 'dart:io' show File;
 
+import 'package:archive/archive.dart' show getCrc32;
 import 'package:dio/dio.dart'
     show CancelToken, Dio, DioException, DioExceptionType, Options;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:hooks_riverpod/hooks_riverpod.dart' show Ref, StateNotifier;
 import 'package:tts_mod_vault/src/state/asset/models/failed_asset_model.dart';
+import 'package:tts_mod_vault/src/state/asset/models/downloaded_file_info.dart';
 import 'package:tts_mod_vault/src/state/download/download_state.dart'
     show DownloadState;
 import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart'
@@ -19,7 +21,8 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         failedAssetsProvider,
         modsProvider,
         selectedModProvider,
-        settingsProvider;
+        settingsProvider,
+        storageProvider;
 import 'package:tts_mod_vault/src/utils.dart'
     show getExtensionByType, getFileNameFromURL, newSteamUserContentUrl;
 import 'package:tts_mod_vault/src/utils/download_error_classifier.dart';
@@ -166,8 +169,8 @@ class DownloadNotifier extends StateNotifier<DownloadState> {
       return !fileExists && !hasPermanentlyFailed;
     }).toList();
 
-    // Track successful downloads
-    final List<(String, String)> successfulDownloads = [];
+    // Track successful downloads: (filename, filepath, size, crc32)
+    final List<(String, String, int, int)> successfulDownloads = [];
 
     try {
       state = state.copyWith(
@@ -250,8 +253,12 @@ class DownloadNotifier extends StateNotifier<DownloadState> {
                   fileName + getExtensionByType(type, tempPath, bytes));
               await tempFile.rename(finalPath);
 
+              // Get file size and calculate CRC32
+              final fileSize = bytes.length;
+              final fileCrc32 = getCrc32(bytes);
+
               // Track successful download
-              successfulDownloads.add((fileName, finalPath));
+              successfulDownloads.add((fileName, finalPath, fileSize, fileCrc32));
             }
 
             // Remove the token after download
@@ -305,13 +312,32 @@ class DownloadNotifier extends StateNotifier<DownloadState> {
     } catch (e) {
       debugPrint('downloadAllFiles error: $e');
     } finally {
-      // Add successful downloads to existing assets list
+      // Add successful downloads to existing assets list and save metadata
       if (successfulDownloads.isNotEmpty) {
         final existingAssetsNotifier =
             ref.read(existingAssetListsProvider.notifier);
-        for (final (filename, filepath) in successfulDownloads) {
+        final storage = ref.read(storageProvider);
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+        final downloadInfoMap = <String, DownloadedFileInfo>{};
+
+        for (final (filename, filepath, size, crc32) in successfulDownloads) {
+          // Add to existing assets
           existingAssetsNotifier.addExistingAsset(type, filename, filepath);
+
+          // Save metadata
+          downloadInfoMap[filename] = DownloadedFileInfo(
+            filepath: filepath,
+            size: size,
+            crc32: crc32,
+            downloadedAt: timestamp,
+          );
         }
+
+        // Bulk save metadata
+        await storage.saveDownloadedFileInfoBulk(downloadInfoMap);
+        debugPrint(
+            'Saved metadata for ${downloadInfoMap.length} downloaded files');
       }
 
       if (!downloadingAllFiles) {

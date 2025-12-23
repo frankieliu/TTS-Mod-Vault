@@ -83,12 +83,14 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       debugPrint("loadModsData - error on clearing cache: $e");
     }
 
-    try {
-      // Contains setting loading message provider
-      await ref.read(existingBackupsProvider.notifier).loadExistingBackups();
-    } catch (e) {
-      debugPrint("loadModsData - error on loading existing backups: $e");
-    }
+    // Disabled: Skip loading backups at startup to improve performance
+    // Backups can be loaded on-demand when needed
+    // try {
+    //   // Contains setting loading message provider
+    //   await ref.read(existingBackupsProvider.notifier).loadExistingBackups();
+    // } catch (e) {
+    //   debugPrint("loadModsData - error on loading existing backups: $e");
+    // }
 
     try {
       ref.read(loadingMessageProvider.notifier).state =

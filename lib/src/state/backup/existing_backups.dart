@@ -27,11 +27,8 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
   Future<void> loadExistingBackups() async {
     debugPrint('loadExistingBackups - started at ${DateTime.now()}');
 
-    // Clear old backup metadata (has filenames WITH extensions)
-    // This will force regeneration with new format (filenames WITHOUT extensions)
-    final storage = ref.read(storageProvider);
-    await storage.clearBackupFileMetadata();
-    debugPrint('Cleared old backup metadata - will regenerate with new format');
+    // Note: This is no longer called during startup, but can be called on-demand
+    // Cache clearing removed since we don't load backups during normal startup
 
     final backupsDir = ref.read(directoriesProvider).backupsDir;
     final directory = Directory(backupsDir);
@@ -64,7 +61,8 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
 
     ref.read(loadingMessageProvider.notifier).state = 'Loading backup files';
 
-    // Get existing metadata from storage (using storage variable from line 31)
+    // Get existing metadata from storage
+    final storage = ref.read(storageProvider);
     final existingMetadata = storage.getAllBackupFileMetadata();
 
     // Split files into those with cached metadata and those needing extraction
