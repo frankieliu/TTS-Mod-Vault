@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show debugPrint;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:tts_mod_vault/src/state/asset/existing_assets_state.dart';
 import 'package:tts_mod_vault/src/state/asset/existing_assets.dart';
@@ -71,6 +72,9 @@ final backedUpFilesProvider = Provider<Set<String>>((ref) {
   for (final metadata in allBackupMetadata.values) {
     backedUpFiles.addAll(metadata.files.keys);
   }
+
+  debugPrint(
+      'backedUpFilesProvider - Aggregated ${backedUpFiles.length} backed up files from ${allBackupMetadata.length} backups');
 
   return backedUpFiles;
 });

@@ -85,7 +85,7 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
     }
 
     debugPrint(
-        'loadExistingBackups - ${backupsFromCache.length} backups loaded from cache, ${filesNeedingExtraction.length} need extraction');
+        'loadExistingBackups - ${backupsFromCache.length} backups loaded from cache (skipped extraction), ${filesNeedingExtraction.length} need extraction');
 
     // Process files that need extraction
     final List<ExistingBackup> extractedBackups = [];

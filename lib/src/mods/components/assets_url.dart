@@ -233,55 +233,64 @@ class AssetsUrl extends HookConsumerWidget {
       ref.read(selectedUrlProvider.notifier).state = asset.url;
     }
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTapDown: (details) => onTapDown(details),
-        onSecondaryTapDown: (details) => onSecondaryTapDown(details),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Status icon
-            if (!isSelected) ...[
-              Icon(
-                asset.fileExists
-                    ? Icons.check_circle
-                    : asset.hasFailed
-                        ? (asset.errorType == DownloadErrorTypeEnum.permanent
-                            ? Icons.error
-                            : Icons.warning)
-                        : Icons.circle_outlined,
-                size: 14,
-                color: asset.fileExists
-                    ? Colors.green
-                    : asset.hasFailed
-                        ? (asset.errorType == DownloadErrorTypeEnum.permanent
-                            ? Colors.red
-                            : Colors.orange)
-                        : Colors.white,
-              ),
-              const SizedBox(width: 4),
-            ],
-            // URL text
-            Flexible(
-              child: Text(
-                asset.url,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isSelected
-                      ? Colors.lightBlue
-                      : asset.fileExists
-                          ? Colors.green
-                          : asset.hasFailed
-                              ? (asset.errorType ==
-                                      DownloadErrorTypeEnum.permanent
-                                  ? Colors.red
-                                  : Colors.orange)
-                              : Colors.white,
+    return Container(
+      decoration: asset.isBackedUp
+          ? BoxDecoration(
+              border: Border.all(color: Colors.blue, width: 2),
+              borderRadius: BorderRadius.circular(4),
+            )
+          : null,
+      padding: asset.isBackedUp ? const EdgeInsets.all(2) : null,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTapDown: (details) => onTapDown(details),
+          onSecondaryTapDown: (details) => onSecondaryTapDown(details),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Status icon
+              if (!isSelected) ...[
+                Icon(
+                  asset.fileExists
+                      ? Icons.check_circle
+                      : asset.hasFailed
+                          ? (asset.errorType == DownloadErrorTypeEnum.permanent
+                              ? Icons.error
+                              : Icons.warning)
+                          : Icons.circle_outlined,
+                  size: 14,
+                  color: asset.fileExists
+                      ? Colors.green
+                      : asset.hasFailed
+                          ? (asset.errorType == DownloadErrorTypeEnum.permanent
+                              ? Colors.red
+                              : Colors.orange)
+                          : Colors.white,
+                ),
+                const SizedBox(width: 4),
+              ],
+              // URL text
+              Flexible(
+                child: Text(
+                  asset.url,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isSelected
+                        ? Colors.lightBlue
+                        : asset.fileExists
+                            ? Colors.green
+                            : asset.hasFailed
+                                ? (asset.errorType ==
+                                        DownloadErrorTypeEnum.permanent
+                                    ? Colors.red
+                                    : Colors.orange)
+                                : Colors.white,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
