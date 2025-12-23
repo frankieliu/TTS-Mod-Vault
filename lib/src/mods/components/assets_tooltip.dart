@@ -20,8 +20,27 @@ class HelpTooltip extends StatelessWidget {
             text: 'Asset Status:\n',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
+          WidgetSpan(
+            child: Icon(Icons.error, size: 16, color: Colors.red),
+          ),
           TextSpan(
-            text: '• Red',
+            text: ' Red',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+          ),
+          TextSpan(text: ' - Permanent download failure\n'),
+          WidgetSpan(
+            child: Icon(Icons.warning, size: 16, color: Colors.orange),
+          ),
+          TextSpan(
+            text: ' Orange',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+          ),
+          TextSpan(text: ' - Temporary download failure\n'),
+          WidgetSpan(
+            child: Icon(Icons.circle_outlined, size: 16, color: Colors.white),
+          ),
+          TextSpan(
+            text: ' Red',
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
           ),
           TextSpan(text: ' - Not downloaded\n'),
@@ -46,6 +65,9 @@ class HelpTooltip extends StatelessWidget {
           TextSpan(
               text:
                   '• Download button: Attempts to download all missing asset files\n'),
+          TextSpan(
+              text:
+                  '• Retry Download: Attempts to re-download failed assets\n'),
           TextSpan(
               text:
                   '• Backup button: Creates a backup (even with missing asset files)\n'),
