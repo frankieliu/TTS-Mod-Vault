@@ -63,8 +63,7 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
 
     ref.read(loadingMessageProvider.notifier).state = 'Loading backup files';
 
-    // Get existing metadata from storage
-    final storage = ref.read(storageProvider);
+    // Get existing metadata from storage (using storage variable from line 31)
     final existingMetadata = storage.getAllBackupFileMetadata();
 
     // Split files into those with cached metadata and those needing extraction
