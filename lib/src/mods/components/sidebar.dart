@@ -3,7 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart' show useState;
 import 'package:hooks_riverpod/hooks_riverpod.dart'
     show HookConsumerWidget, WidgetRef;
 import 'package:tts_mod_vault/src/mods/components/components.dart'
-    show DownloadModByIdDialog, ImportJsonDialog;
+    show AssetMetadataDialog, DownloadModByIdDialog, ImportJsonDialog;
 import 'package:tts_mod_vault/src/settings/settings_dialog.dart'
     show SettingsDialog;
 import 'package:tts_mod_vault/src/state/provider.dart'
@@ -183,6 +183,16 @@ class Sidebar extends HookConsumerWidget {
                       await ref.read(loaderProvider).refreshAppData(true),
                 );
               },
+            ),
+            _SidebarItem(
+              icon: Icons.info_outline,
+              label: 'View Asset Metadata',
+              isExpanded: isHovered.value,
+              isDisabled: actionInProgress,
+              onPressed: () => showDialog(
+                context: context,
+                builder: (context) => AssetMetadataDialog(),
+              ),
             ),
             Spacer(),
             _SidebarItem(
