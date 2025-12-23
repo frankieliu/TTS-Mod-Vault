@@ -4,21 +4,25 @@ import 'package:dio/dio.dart'
     show CancelToken, Dio, DioException, DioExceptionType, Options;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:hooks_riverpod/hooks_riverpod.dart' show Ref, StateNotifier;
+import 'package:tts_mod_vault/src/state/asset/models/failed_asset_model.dart';
 import 'package:tts_mod_vault/src/state/download/download_state.dart'
     show DownloadState;
 import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart'
     show AssetTypeEnum;
+import 'package:tts_mod_vault/src/state/enums/download_error_type_enum.dart';
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart' show Mod;
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
         directoriesProvider,
         downloadProvider,
         existingAssetListsProvider,
+        failedAssetsProvider,
         modsProvider,
         selectedModProvider,
         settingsProvider;
 import 'package:tts_mod_vault/src/utils.dart'
     show getExtensionByType, getFileNameFromURL, newSteamUserContentUrl;
+import 'package:tts_mod_vault/src/utils/download_error_classifier.dart';
 
 import 'package:path/path.dart' as path;
 
@@ -143,11 +147,23 @@ class DownloadNotifier extends StateNotifier<DownloadState> {
       return;
     }
 
+    final failedAssetsNotifier = ref.read(failedAssetsProvider.notifier);
+    final failedAssetsState = ref.read(failedAssetsProvider);
+
     final urls = modAssetListUrls.where((url) {
       final fileName = getFileNameFromURL(url);
-      return !ref
+
+      // Skip if file already exists
+      final fileExists = ref
           .read(existingAssetListsProvider.notifier)
           .doesAssetFileExist(fileName, type);
+
+      // Skip if asset has permanently failed
+      final failedAsset = failedAssetsState.failedAssets[url];
+      final hasPermanentlyFailed = failedAsset != null &&
+          failedAsset.errorType == DownloadErrorTypeEnum.permanent;
+
+      return !fileExists && !hasPermanentlyFailed;
     }).toList();
 
     // Track successful downloads
@@ -258,7 +274,25 @@ class DownloadNotifier extends StateNotifier<DownloadState> {
               return; // Don't treat cancellation as an error
             }
 
-            debugPrint('Error occurred while downloading files: $e');
+            // Classify and store the error
+            final errorType = DownloadErrorClassifier.classifyError(e);
+            final errorMessage = DownloadErrorClassifier.getErrorMessage(e);
+
+            // Don't store unknown errors (could be transient issues)
+            if (errorType != DownloadErrorTypeEnum.unknown) {
+              await failedAssetsNotifier.addFailedAsset(
+                url: originalUrl,
+                type: type,
+                errorType: errorType,
+                errorMessage: errorMessage,
+              );
+
+              debugPrint(
+                  'Stored failed download: $originalUrl ($errorType: $errorMessage)');
+            } else {
+              debugPrint(
+                  'Error occurred while downloading files (not stored): $e');
+            }
           }
         }));
 
@@ -317,5 +351,58 @@ class DownloadNotifier extends StateNotifier<DownloadState> {
     } else {
       return url; // Could not resolve; return original
     }
+  }
+
+  Future<void> retryFailedDownloads({
+    AssetTypeEnum? specificType,
+    List<String>? specificUrls,
+  }) async {
+    final failedAssetsNotifier = ref.read(failedAssetsProvider.notifier);
+    final failedAssets = ref.read(failedAssetsProvider).failedAssets;
+
+    List<FailedAsset> toRetry;
+
+    if (specificUrls != null) {
+      // Retry specific URLs
+      toRetry = specificUrls
+          .map((url) => failedAssets[url])
+          .whereType<FailedAsset>()
+          .toList();
+    } else if (specificType != null) {
+      // Retry all of a specific type
+      toRetry = failedAssets.values
+          .where((asset) => asset.type == specificType)
+          .toList();
+    } else {
+      // Retry all failed downloads
+      toRetry = failedAssets.values.toList();
+    }
+
+    if (toRetry.isEmpty) {
+      debugPrint('No failed downloads to retry');
+      return;
+    }
+
+    debugPrint('Retrying ${toRetry.length} failed downloads');
+
+    // Group by type for batch downloading
+    final Map<AssetTypeEnum, List<String>> urlsByType = {};
+    for (final failedAsset in toRetry) {
+      urlsByType.putIfAbsent(failedAsset.type, () => []).add(failedAsset.url);
+
+      // Remove from failed list before retry
+      await failedAssetsNotifier.removeFailedAsset(failedAsset.url);
+    }
+
+    // Download each type
+    for (final entry in urlsByType.entries) {
+      await downloadFiles(
+        modAssetListUrls: entry.value,
+        type: entry.key,
+        downloadingAllFiles: false,
+      );
+    }
+
+    resetState();
   }
 }

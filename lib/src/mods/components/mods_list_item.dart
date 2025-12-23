@@ -162,14 +162,17 @@ class ModsListItem extends HookConsumerWidget {
                           message: filesMessage,
                           child: Text(
                             showAssetCount
-                                ? "${mod.existingAssetCount}/${mod.assetCount}"
+                                ? "${mod.existingAssetCount}/${mod.assetCount}${mod.failedAssetCount != null && mod.failedAssetCount! > 0 ? ' (${mod.failedAssetCount} failed)' : ''}"
                                 : " ",
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w500,
-                              color: mod.existingAssetCount == mod.assetCount
-                                  ? Colors.green
-                                  : Colors.white,
+                              color: mod.failedAssetCount != null &&
+                                      mod.failedAssetCount! > 0
+                                  ? Colors.orange
+                                  : mod.existingAssetCount == mod.assetCount
+                                      ? Colors.green
+                                      : Colors.white,
                             ),
                           ),
                         ),

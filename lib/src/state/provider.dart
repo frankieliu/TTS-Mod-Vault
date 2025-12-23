@@ -1,6 +1,8 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:tts_mod_vault/src/state/asset/existing_assets_state.dart';
 import 'package:tts_mod_vault/src/state/asset/existing_assets.dart';
+import 'package:tts_mod_vault/src/state/asset/failed_assets.dart';
+import 'package:tts_mod_vault/src/state/asset/failed_assets_state.dart';
 import 'package:tts_mod_vault/src/state/backup/backup_state.dart';
 import 'package:tts_mod_vault/src/state/backup/backup.dart';
 import 'package:tts_mod_vault/src/state/backup/existing_backups.dart';
@@ -48,6 +50,11 @@ final directoriesProvider =
 final existingAssetListsProvider =
     StateNotifierProvider<ExistingAssetsNotifier, ExistingAssetsListsState>(
   (ref) => ExistingAssetsNotifier(ref),
+);
+
+final failedAssetsProvider =
+    StateNotifierProvider<FailedAssetsNotifier, FailedAssetsState>(
+  (ref) => FailedAssetsNotifier(ref),
 );
 
 final existingBackupsProvider =

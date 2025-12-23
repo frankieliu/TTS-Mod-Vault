@@ -10,6 +10,7 @@ import 'package:tts_mod_vault/src/mods/components/components.dart'
         HelpTooltip,
         CustomTooltip,
         BackupProgressBar;
+import 'package:tts_mod_vault/src/mods/components/failed_downloads_dialog.dart';
 import 'package:tts_mod_vault/src/state/asset/models/asset_model.dart'
     show Asset;
 import 'package:tts_mod_vault/src/state/backup/backup_state.dart'
@@ -188,6 +189,22 @@ class _SelectedModViewComponent extends HookConsumerWidget {
                   ),
                 ),
               ),
+              if (selectedMod.failedAssetCount != null &&
+                  selectedMod.failedAssetCount! > 0)
+                IconButton.filled(
+                  icon: Badge(
+                    label: Text('${selectedMod.failedAssetCount}'),
+                    backgroundColor: Colors.red,
+                    child: const Icon(Icons.error_outline),
+                  ),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => const FailedDownloadsDialog(),
+                    );
+                  },
+                  tooltip: 'View failed downloads',
+                ),
               Padding(
                 padding: const EdgeInsets.all(4.0),
                 child: HelpTooltip(),

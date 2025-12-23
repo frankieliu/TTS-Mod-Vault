@@ -1,7 +1,9 @@
-import 'dart:convert' show json, jsonDecode;
+import 'dart:convert' show json, jsonDecode, jsonEncode;
 
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:hive_ce_flutter/hive_flutter.dart' show Box, Hive;
+import 'package:tts_mod_vault/src/state/asset/models/failed_asset_model.dart';
+import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart';
 import 'package:tts_mod_vault/src/state/settings/settings_state.dart'
     show SettingsState;
 
@@ -10,11 +12,13 @@ class Storage {
   late Box<dynamic> _urlsBox;
   late Box<String> _metadataBox;
   late Box<String> _appDataBox;
+  late Box<String> _failedAssetsBox;
 
   // Boxes
   static const String urlsBox = 'ModUrls';
   static const String metadataBox = 'ModMetadata';
   static const String appDataBox = 'AppData';
+  static const String failedAssetsBox = 'FailedAssets';
 
   // Keys
   static const String dateTimeStampSuffix = 'DateTimeStamp';
@@ -30,6 +34,7 @@ class Storage {
       _urlsBox = await Hive.openBox<dynamic>(urlsBox);
       _metadataBox = await Hive.openBox<String>(metadataBox);
       _appDataBox = await Hive.openBox<String>(appDataBox);
+      _failedAssetsBox = await Hive.openBox<String>(failedAssetsBox);
 
       _initialized = true;
     }
@@ -145,5 +150,72 @@ class Storage {
   Future<void> clearAllModData() async {
     await Hive.box<dynamic>(urlsBox).clear();
     await Hive.box<String>(metadataBox).clear();
+  }
+
+  // FAILED ASSETS
+  Future<void> saveFailedAsset(String url, FailedAsset failedAsset) async {
+    final jsonMap = failedAsset.toJson();
+    final jsonStr = jsonEncode(jsonMap);
+    await _failedAssetsBox.put(url, jsonStr);
+  }
+
+  FailedAsset? getFailedAsset(String url) {
+    final jsonStr = _failedAssetsBox.get(url);
+    if (jsonStr == null) return null;
+
+    try {
+      final Map<String, dynamic> decoded = jsonDecode(jsonStr);
+      return FailedAsset.fromJson(decoded);
+    } catch (e) {
+      debugPrint('Error decoding failed asset for url $url: $e');
+      return null;
+    }
+  }
+
+  Future<void> deleteFailedAsset(String url) async {
+    await _failedAssetsBox.delete(url);
+  }
+
+  Map<String, FailedAsset> getAllFailedAssets() {
+    final Map<String, FailedAsset> result = {};
+
+    for (final key in _failedAssetsBox.keys) {
+      final jsonStr = _failedAssetsBox.get(key);
+      if (jsonStr != null) {
+        try {
+          final decoded = jsonDecode(jsonStr);
+          result[key] = FailedAsset.fromJson(decoded);
+        } catch (e) {
+          debugPrint('Error decoding failed asset for key $key: $e');
+        }
+      }
+    }
+
+    return result;
+  }
+
+  Future<void> clearFailedAssets() async {
+    await _failedAssetsBox.clear();
+  }
+
+  Future<void> deleteFailedAssetsByType(AssetTypeEnum type) async {
+    final toDelete = <String>[];
+
+    for (final key in _failedAssetsBox.keys) {
+      final jsonStr = _failedAssetsBox.get(key);
+      if (jsonStr != null) {
+        try {
+          final decoded = jsonDecode(jsonStr);
+          final failedAsset = FailedAsset.fromJson(decoded);
+          if (failedAsset.type == type) {
+            toDelete.add(key);
+          }
+        } catch (e) {
+          debugPrint('Error checking failed asset type for key $key: $e');
+        }
+      }
+    }
+
+    await _failedAssetsBox.deleteAll(toDelete);
   }
 }

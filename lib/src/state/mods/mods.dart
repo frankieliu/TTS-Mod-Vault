@@ -40,6 +40,7 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         directoriesProvider,
         existingAssetListsProvider,
         existingBackupsProvider,
+        failedAssetsProvider,
         loadingMessageProvider,
         selectedModProvider,
         settingsProvider,
@@ -95,6 +96,11 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       await ref
           .read(existingAssetListsProvider.notifier)
           .loadExistingAssetsLists();
+
+      ref.read(loadingMessageProvider.notifier).state =
+          'Loading failed downloads';
+
+      await ref.read(failedAssetsProvider.notifier).loadFailedAssets();
 
       ref.read(loadingMessageProvider.notifier).state =
           'Creating lists of items to load';
@@ -688,6 +694,7 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       assetCount: assetLists.$2,
       existingAssetCount: assetLists.$3,
       missingAssetCount: assetLists.$2 - assetLists.$3,
+      failedAssetCount: assetLists.$4,
     );
   }
 
@@ -704,22 +711,28 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
 
   List<Asset> _getAssetsByType(List<String> urls, AssetTypeEnum type) {
     final assetMap = _getAssetMapByType(type);
+    final failedAssets = ref.read(failedAssetsProvider).failedAssets;
 
     return urls.map((url) {
       final normalizedUrl = url.replaceAll(oldCloudUrl, newSteamUserContentUrl);
       final filename = getFileNameFromURL(normalizedUrl);
       final filepath = assetMap[filename]; // O(1) lookup!
 
+      // Check if this asset has failed
+      final failedAsset = failedAssets[normalizedUrl];
+
       return Asset(
         url: normalizedUrl,
         fileExists: filepath != null,
         filePath: filepath,
+        hasFailed: failedAsset != null,
+        errorType: failedAsset?.errorType,
       );
     }).toList();
   }
 
   // TODO remove/replace with isolate method?
-  (AssetLists, int, int) _getAssetListsFromUrls(Map<String, String> data) {
+  (AssetLists, int, int, int) _getAssetListsFromUrls(Map<String, String> data) {
     final ignoreAudio = ref.read(settingsProvider).ignoreAudioAssets;
 
     Map<AssetTypeEnum, List<String>> urlsByType = {
@@ -743,11 +756,10 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
         .map((type) => _getAssetsByType(urlsByType[type] ?? [], type))
         .toList();
 
-    final totalCount = results.expand((list) => list).length;
-    final existingFilesCount = results
-        .expand((list) => list)
-        .where((asset) => asset.fileExists)
-        .length;
+    final allAssets = results.expand((list) => list);
+    final totalCount = allAssets.length;
+    final existingFilesCount = allAssets.where((asset) => asset.fileExists).length;
+    final failedFilesCount = allAssets.where((asset) => asset.hasFailed).length;
 
     return (
       AssetLists(
@@ -759,6 +771,7 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       ),
       totalCount,
       existingFilesCount,
+      failedFilesCount,
     );
   }
 

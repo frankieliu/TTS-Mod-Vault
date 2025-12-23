@@ -189,11 +189,13 @@ class ModsGridCard extends HookConsumerWidget {
                                 waitDuration: Duration(milliseconds: 300),
                                 message: filesMessage,
                                 child: Text(
-                                  "${mod.existingAssetCount}/${mod.assetCount}",
+                                  "${mod.existingAssetCount}/${mod.assetCount}${mod.failedAssetCount != null && mod.failedAssetCount! > 0 ? ' (${mod.failedAssetCount} failed)' : ''}",
                                   style: TextStyle(
                                     fontWeight: FontWeight.w500,
-                                    color:
-                                        mod.existingAssetCount == mod.assetCount
+                                    color: mod.failedAssetCount != null &&
+                                            mod.failedAssetCount! > 0
+                                        ? Colors.orange
+                                        : mod.existingAssetCount == mod.assetCount
                                             ? Colors.green
                                             : Colors.white,
                                   ),

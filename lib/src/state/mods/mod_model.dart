@@ -28,6 +28,7 @@ class Mod {
   final int? assetCount;
   final int? existingAssetCount;
   final int? missingAssetCount;
+  final int? failedAssetCount;
 
   Mod({
     required this.modType,
@@ -44,6 +45,7 @@ class Mod {
     this.assetCount,
     this.existingAssetCount,
     this.missingAssetCount,
+    this.failedAssetCount,
   });
 
   Mod copyWith({
@@ -60,6 +62,7 @@ class Mod {
     int? assetCount,
     int? existingAssetCount,
     int? missingAssetCount,
+    int? failedAssetCount,
   }) {
     return Mod(
       modType: modType,
@@ -76,6 +79,7 @@ class Mod {
       assetCount: assetCount ?? this.assetCount,
       existingAssetCount: existingAssetCount ?? this.existingAssetCount,
       missingAssetCount: missingAssetCount ?? this.missingAssetCount,
+      failedAssetCount: failedAssetCount ?? this.failedAssetCount,
     );
   }
 
