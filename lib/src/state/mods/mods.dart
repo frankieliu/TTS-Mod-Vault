@@ -37,6 +37,7 @@ import 'package:tts_mod_vault/src/state/mods/mods_isolates.dart'
 import 'package:tts_mod_vault/src/state/mods/mods_state.dart' show ModsState;
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
+        backedUpFilesProvider,
         directoriesProvider,
         existingAssetListsProvider,
         existingBackupsProvider,
