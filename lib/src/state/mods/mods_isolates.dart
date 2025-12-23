@@ -12,6 +12,7 @@ import 'package:tts_mod_vault/src/state/backup/backup_status_enum.dart'
     show ExistingBackupStatusEnum;
 import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart'
     show AssetTypeEnum;
+import 'package:tts_mod_vault/src/state/enums/download_error_type_enum.dart';
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart'
     show Mod, ModTypeEnum;
 import 'package:tts_mod_vault/src/utils.dart'
@@ -33,6 +34,8 @@ class IsolateWorkData {
   final Map<String, String> existingImages;
   final Map<String, String> existingModels;
   final Map<String, String> existingPdf;
+  // Failed assets maps for O(1) lookups (url -> errorType)
+  final Map<String, String> failedAssets;
 
   IsolateWorkData({
     required this.batches,
@@ -44,6 +47,7 @@ class IsolateWorkData {
     required this.existingImages,
     required this.existingModels,
     required this.existingPdf,
+    required this.failedAssets,
   });
 }
 
@@ -140,6 +144,7 @@ Future<IsolateWorkResult> processMultipleBatchesInIsolate(
             workData.existingModels,
             workData.existingPdf,
             workData.ignoreAudioAssets,
+            workData.failedAssets,
           );
 
           final completeMod = mod.copyWith(
@@ -255,6 +260,7 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
   Map<String, String> models,
   Map<String, String> pdf,
   bool ignoreAudio,
+  Map<String, String> failedAssets,
 ) {
   // Group URLs by type
   Map<AssetTypeEnum, List<String>> urlsByType = {
@@ -290,10 +296,25 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
       final filename = getFileNameFromURL(url);
       final filepath = assetMap[filename]; // O(1) lookup!
 
+      // Check if this asset has failed
+      final errorTypeString = failedAssets[url]; // O(1) lookup!
+      final hasFailed = errorTypeString != null;
+      DownloadErrorTypeEnum? errorType;
+
+      if (hasFailed) {
+        // Convert string to enum
+        errorType = DownloadErrorTypeEnum.values.firstWhere(
+          (e) => e.name == errorTypeString,
+          orElse: () => DownloadErrorTypeEnum.unknown,
+        );
+      }
+
       return Asset(
         url: url,
         fileExists: filepath != null,
         filePath: filepath,
+        hasFailed: hasFailed,
+        errorType: errorType,
       );
     }).toList();
 

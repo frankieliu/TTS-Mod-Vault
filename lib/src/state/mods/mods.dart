@@ -175,6 +175,12 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       final ignoreAudio = ref.read(settingsProvider).ignoreAudioAssets;
       final existingAssets = ref.read(existingAssetListsProvider);
 
+      // Get failed assets and convert to url -> errorType.name map for isolate
+      final failedAssetsState = ref.read(failedAssetsProvider);
+      final failedAssetsMap = failedAssetsState.failedAssets.map(
+        (url, failedAsset) => MapEntry(url, failedAsset.errorType.name),
+      );
+
       final List<IsolateWorkData> isolateWorkData =
           batchesPerIsolate.map((batches) {
         // Get all mods for this isolate to prepare relevant cached data
@@ -199,6 +205,7 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
           existingImages: existingAssets.images,
           existingModels: existingAssets.models,
           existingPdf: existingAssets.pdf,
+          failedAssets: failedAssetsMap,
         );
       }).toList();
 
