@@ -269,6 +269,13 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
   Map<String, String> failedAssets,
   Set<String> backedUpFiles,
 ) {
+  // Debug: Show backed up files count
+  debugPrint(
+      '_buildAssetListsFromUrls - backedUpFiles set contains ${backedUpFiles.length} files');
+  if (backedUpFiles.length > 0 && backedUpFiles.length < 20) {
+    debugPrint('  First few backed up files: ${backedUpFiles.take(5).join(", ")}');
+  }
+
   // Group URLs by type
   Map<AssetTypeEnum, List<String>> urlsByType = {
     for (final type in AssetTypeEnum.values) type: [],
@@ -318,6 +325,11 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
 
       // Check if this asset is backed up
       final isBackedUp = backedUpFiles.contains(filename); // O(1) lookup!
+
+      // Debug: Log first few backed up assets
+      if (isBackedUp && backedUpFiles.length > 0) {
+        debugPrint('Asset backed up: $filename (from URL: $url)');
+      }
 
       return Asset(
         url: url,
