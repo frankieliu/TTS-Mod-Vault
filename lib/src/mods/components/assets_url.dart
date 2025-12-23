@@ -10,10 +10,12 @@ import 'package:tts_mod_vault/src/state/asset/models/asset_model.dart'
     show Asset;
 import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart'
     show AssetTypeEnum;
+import 'package:tts_mod_vault/src/state/enums/download_error_type_enum.dart';
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
         actionInProgressProvider,
         downloadProvider,
+        failedAssetsProvider,
         modsProvider,
         selectedModProvider,
         selectedUrlProvider,
@@ -122,7 +124,7 @@ class AssetsUrl extends HookConsumerWidget {
                 spacing: 8,
                 children: [
                   Icon(Icons.download),
-                  Text('Download'),
+                  Text(asset.hasFailed ? 'Retry Download' : 'Download'),
                 ],
               ),
             ),
@@ -188,6 +190,13 @@ class AssetsUrl extends HookConsumerWidget {
               final selectedMod = ref.read(selectedModProvider);
               if (selectedMod == null) break;
 
+              // If asset has failed before, remove from failed list before retrying
+              if (asset.hasFailed) {
+                await ref
+                    .read(failedAssetsProvider.notifier)
+                    .removeFailedAsset(asset.url);
+              }
+
               await ref.read(downloadProvider.notifier).downloadFiles(
                 modAssetListUrls: [asset.url],
                 type: type,
@@ -229,16 +238,50 @@ class AssetsUrl extends HookConsumerWidget {
       child: GestureDetector(
         onTapDown: (details) => onTapDown(details),
         onSecondaryTapDown: (details) => onSecondaryTapDown(details),
-        child: Text(
-          asset.url,
-          style: TextStyle(
-            fontSize: 12,
-            color: isSelected
-                ? Colors.lightBlue
-                : asset.fileExists
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Status icon
+            if (!isSelected) ...[
+              Icon(
+                asset.fileExists
+                    ? Icons.check_circle
+                    : asset.hasFailed
+                        ? (asset.errorType == DownloadErrorTypeEnum.permanent
+                            ? Icons.error
+                            : Icons.warning)
+                        : Icons.circle_outlined,
+                size: 14,
+                color: asset.fileExists
                     ? Colors.green
-                    : Colors.red,
-          ),
+                    : asset.hasFailed
+                        ? (asset.errorType == DownloadErrorTypeEnum.permanent
+                            ? Colors.red
+                            : Colors.orange)
+                        : Colors.white,
+              ),
+              const SizedBox(width: 4),
+            ],
+            // URL text
+            Flexible(
+              child: Text(
+                asset.url,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isSelected
+                      ? Colors.lightBlue
+                      : asset.fileExists
+                          ? Colors.green
+                          : asset.hasFailed
+                              ? (asset.errorType ==
+                                      DownloadErrorTypeEnum.permanent
+                                  ? Colors.red
+                                  : Colors.orange)
+                              : Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
