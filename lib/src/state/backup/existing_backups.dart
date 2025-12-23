@@ -50,48 +50,96 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
       return;
     }
 
+    // TODO: Remove this limit after testing - currently limiting to first 10 backups
+    final limitedFiles = files.take(10).toList();
+    debugPrint(
+        'loadExistingBackups - TESTING MODE: Processing ${limitedFiles.length} of ${files.length} total backups');
+
     ref.read(loadingMessageProvider.notifier).state = 'Loading backup files';
 
-    // Split files into ASCII and Unicode groups
-    final asciiFiles = <File>[];
-    final unicodeFiles = <File>[];
+    // Get existing metadata from storage
+    final storage = ref.read(storageProvider);
+    final existingMetadata = storage.getAllBackupFileMetadata();
 
-    for (final file in files) {
-      if (_containsUnicode(file.path)) {
-        unicodeFiles.add(file);
+    // Split files into those with cached metadata and those needing extraction
+    final filesNeedingExtraction = <File>[];
+    final backupsFromCache = <ExistingBackup>[];
+
+    for (final file in limitedFiles) {
+      final filename = path.basename(file.path);
+      final cachedMetadata = existingMetadata[filename];
+
+      if (cachedMetadata != null) {
+        // Use cached metadata - no need to extract ZIP
+        final stat = await file.stat();
+        backupsFromCache.add(ExistingBackup(
+          filename: filename,
+          filepath: path.normalize(file.path),
+          lastModifiedTimestamp: stat.modified.millisecondsSinceEpoch ~/ 1000,
+          totalAssetCount: null,
+        ));
       } else {
-        asciiFiles.add(file);
+        // Need to extract metadata from ZIP
+        filesNeedingExtraction.add(file);
       }
     }
 
     debugPrint(
-        'loadExistingBackups - Processing ${asciiFiles.length} ASCII files in isolates, ${unicodeFiles.length} Unicode files in main thread');
+        'loadExistingBackups - ${backupsFromCache.length} backups loaded from cache, ${filesNeedingExtraction.length} need extraction');
 
-    final numberOfIsolates = max(Platform.numberOfProcessors - 2, 2);
-    final chunkedAsciiFiles = _chunkList(asciiFiles, numberOfIsolates);
-    final futures = chunkedAsciiFiles
-        .map((chunk) => Isolate.run(() => _processBackupFiles(chunk)))
-        .toList();
+    // Process files that need extraction
+    final List<ExistingBackup> extractedBackups = [];
+    if (filesNeedingExtraction.isNotEmpty) {
+      // Split files into ASCII and Unicode groups
+      final asciiFiles = <File>[];
+      final unicodeFiles = <File>[];
 
-    if (unicodeFiles.isNotEmpty) {
-      futures.add(_processBackupFiles(unicodeFiles));
-    }
+      for (final file in filesNeedingExtraction) {
+        if (_containsUnicode(file.path)) {
+          unicodeFiles.add(file);
+        } else {
+          asciiFiles.add(file);
+        }
+      }
 
-    final results = await Future.wait(futures);
-    final backups = results.expand((list) => list.map((r) => r.$1)).toList();
+      debugPrint(
+          'loadExistingBackups - Processing ${asciiFiles.length} ASCII files in isolates, ${unicodeFiles.length} Unicode files in main thread');
 
-    // Save file metadata to storage
-    for (final result in results) {
-      for (final (backup, metadata) in result) {
-        if (metadata != null) {
-          await ref
-              .read(storageProvider)
-              .saveBackupFileMetadata(backup.filename, metadata);
+      final numberOfIsolates = max(Platform.numberOfProcessors - 2, 2);
+      final chunkedAsciiFiles = _chunkList(asciiFiles, numberOfIsolates);
+
+      // Process each isolate and save metadata incrementally
+      for (final chunk in chunkedAsciiFiles) {
+        final result = await Isolate.run(() => _processBackupFiles(chunk));
+
+        // Save metadata immediately after each batch completes
+        for (final (backup, metadata) in result) {
+          extractedBackups.add(backup);
+          if (metadata != null) {
+            await storage.saveBackupFileMetadata(backup.filename, metadata);
+            debugPrint('Saved metadata for ${backup.filename}');
+          }
+        }
+      }
+
+      // Process unicode files in main thread
+      if (unicodeFiles.isNotEmpty) {
+        final result = await _processBackupFiles(unicodeFiles);
+
+        // Save metadata immediately
+        for (final (backup, metadata) in result) {
+          extractedBackups.add(backup);
+          if (metadata != null) {
+            await storage.saveBackupFileMetadata(backup.filename, metadata);
+            debugPrint('Saved metadata for ${backup.filename}');
+          }
         }
       }
     }
 
-    state = ExistingBackupsState(backups: backups);
+    // Combine cached and extracted backups
+    final allBackups = [...backupsFromCache, ...extractedBackups];
+    state = ExistingBackupsState(backups: allBackups);
     debugPrint('loadExistingBackups - finished at ${DateTime.now()}');
   }
 
