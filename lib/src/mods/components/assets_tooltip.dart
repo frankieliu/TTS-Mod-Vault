@@ -21,13 +21,21 @@ class HelpTooltip extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           WidgetSpan(
-            child: Icon(Icons.error, size: 16, color: Colors.red),
+            child: Icon(Icons.check_circle, size: 16, color: Colors.green),
           ),
           TextSpan(
-            text: ' Red',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            text: ' Green',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
           ),
-          TextSpan(text: ' - Permanent download failure\n'),
+          TextSpan(text: ' - Downloaded\n'),
+          WidgetSpan(
+            child: Icon(Icons.circle_outlined, size: 16, color: Colors.white),
+          ),
+          TextSpan(
+            text: ' White',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          TextSpan(text: ' - Not downloaded\n'),
           WidgetSpan(
             child: Icon(Icons.warning, size: 16, color: Colors.orange),
           ),
@@ -37,18 +45,13 @@ class HelpTooltip extends StatelessWidget {
           ),
           TextSpan(text: ' - Temporary download failure\n'),
           WidgetSpan(
-            child: Icon(Icons.circle_outlined, size: 16, color: Colors.white),
+            child: Icon(Icons.error, size: 16, color: Colors.red),
           ),
           TextSpan(
             text: ' Red',
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
           ),
-          TextSpan(text: ' - Not downloaded\n'),
-          TextSpan(
-            text: '• Green',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
-          ),
-          TextSpan(text: ' - Downloaded\n'),
+          TextSpan(text: ' - Permanent download failure\n'),
           TextSpan(
             text: '• Blue',
             style:
