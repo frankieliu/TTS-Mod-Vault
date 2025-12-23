@@ -151,7 +151,8 @@ Future<IsolateWorkResult> processMultipleBatchesInIsolate(
             assetLists: assetLists.$1,
             assetCount: assetLists.$2,
             existingAssetCount: assetLists.$3,
-            missingAssetCount: assetLists.$2 - assetLists.$3,
+            missingAssetCount: assetLists.$2 - assetLists.$3 - assetLists.$4,
+            failedAssetCount: assetLists.$4,
           );
 
           allProcessedMods.add(completeMod);
@@ -252,7 +253,8 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
 
 /// Builds AssetLists from URLs with O(1) existence checks
 /// This function runs in isolate and doesn't have access to Riverpod
-(AssetLists, int, int) _buildAssetListsFromUrls(
+/// Returns: (AssetLists, totalCount, existingCount, failedCount)
+(AssetLists, int, int, int) _buildAssetListsFromUrls(
   Map<String, String> urlsData,
   Map<String, String> assetBundles,
   Map<String, String> audio,
@@ -326,6 +328,16 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
       .expand((list) => list)
       .where((asset) => asset.fileExists)
       .length;
+  // Failed count = assets that failed AND don't exist on disk
+  final failedAssetsCount = allAssets
+      .expand((list) => list)
+      .where((asset) => asset.hasFailed && !asset.fileExists)
+      .length;
+  // Missing count = assets that don't exist AND haven't failed
+  final missingAssetsCount = allAssets
+      .expand((list) => list)
+      .where((asset) => !asset.fileExists && !asset.hasFailed)
+      .length;
 
   return (
     AssetLists(
@@ -337,6 +349,7 @@ Map<String, String> _extractUrlsWithRegex(String jsonString) {
     ),
     totalCount,
     existingFilesCount,
+    failedAssetsCount,
   );
 }
 
