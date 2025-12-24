@@ -72,14 +72,26 @@ class ExistingAssetsNotifier extends StateNotifier<ExistingAssetsListsState> {
       ...state.pdf,
     };
 
+    // Get existing metadata from storage
+    final existingMetadata = storage.getAllDownloadedFileInfo();
+
     debugPrint('  Checking ${allFiles.length} existing files');
+    debugPrint('  Found ${existingMetadata.length} files with existing metadata');
 
     int processedCount = 0;
+    int skippedCount = 0;
     int errorCount = 0;
 
     for (final entry in allFiles.entries) {
       final filename = entry.key;
       final filepath = entry.value;
+
+      // Skip if metadata already exists and has valid size
+      final existingInfo = existingMetadata[filename];
+      if (existingInfo != null && existingInfo.size > 0) {
+        skippedCount++;
+        continue;
+      }
 
       try {
         final file = File(filepath);
@@ -104,7 +116,10 @@ class ExistingAssetsNotifier extends StateNotifier<ExistingAssetsListsState> {
     if (downloadInfoMap.isNotEmpty) {
       await storage.saveDownloadedFileInfoBulk(downloadInfoMap);
       debugPrint(
-          '_populateExistingFileMetadata - finished: $processedCount files processed, $errorCount errors');
+          '_populateExistingFileMetadata - finished: $processedCount files processed, $skippedCount skipped (already have metadata), $errorCount errors');
+    } else {
+      debugPrint(
+          '_populateExistingFileMetadata - finished: All files already have metadata ($skippedCount files)');
     }
   }
 
