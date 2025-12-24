@@ -1,6 +1,5 @@
 import 'package:file_picker/file_picker.dart' show FilePicker;
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:hooks_riverpod/hooks_riverpod.dart' show Ref;
 import 'package:path/path.dart' as p;
 import 'package:tts_mod_vault/src/state/backup/backup_status_enum.dart'
     show ExistingBackupStatusEnum;
@@ -16,7 +15,7 @@ import 'package:tts_mod_vault/src/state/provider.dart'
 /// Unified service for all mod operations (download, backup, combined)
 /// Consolidates logic previously duplicated between single-mod and bulk operations
 class ModOperationsService {
-  final Ref ref;
+  final dynamic ref; // Accept both Ref and WidgetRef
 
   ModOperationsService(this.ref);
 
