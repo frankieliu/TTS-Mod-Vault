@@ -15,6 +15,7 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         backupProvider,
         directoriesProvider,
         downloadProvider,
+        existingBackupsProvider,
         loaderProvider,
         modsProvider,
         selectedModProvider,
