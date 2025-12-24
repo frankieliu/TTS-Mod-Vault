@@ -9,7 +9,6 @@ import 'package:tts_mod_vault/src/state/backup/backup_status_enum.dart'
 import 'package:tts_mod_vault/src/state/bulk_actions/bulk_actions_state.dart'
     show BulkActionsState, BulkActionsStatusEnum, BulkBackupBehaviorEnum;
 import 'package:tts_mod_vault/src/state/mod_operations/backup_decision.dart';
-import 'package:tts_mod_vault/src/state/mod_operations/mod_operations_service.dart';
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart' show Mod;
 import 'package:tts_mod_vault/src/state/mods/mods_isolates.dart';
 import 'package:tts_mod_vault/src/state/provider.dart'
@@ -19,6 +18,7 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         downloadProvider,
         existingBackupsProvider,
         loaderProvider,
+        modOperationsServiceProvider,
         modsProvider,
         selectedModProvider,
         selectedModTypeProvider,
@@ -57,7 +57,7 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       totalModNumber: mods.length,
     );
 
-    final service = ModOperationsService(ref);
+    final service = ref.read(modOperationsServiceProvider);
 
     await service.downloadMods(
       mods,
@@ -97,7 +97,7 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       return;
     }
 
-    final service = ModOperationsService(ref);
+    final service = ref.read(modOperationsServiceProvider);
     final config = BackupConfig.bulk(
       behavior: backupBehavior,
       folder: selectedBackupFolder,
@@ -141,7 +141,7 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       return;
     }
 
-    final service = ModOperationsService(ref);
+    final service = ref.read(modOperationsServiceProvider);
     final config = BackupConfig.bulk(
       behavior: backupBehavior,
       folder: selectedBackupFolder,

@@ -19,6 +19,7 @@ import 'package:tts_mod_vault/src/state/directories/directories_state.dart';
 import 'package:tts_mod_vault/src/state/download/download.dart';
 import 'package:tts_mod_vault/src/state/download/download_state.dart';
 import 'package:tts_mod_vault/src/state/loader/loader.dart';
+import 'package:tts_mod_vault/src/state/mod_operations/mod_operations_service.dart';
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart';
 import 'package:tts_mod_vault/src/state/mods/mods_state.dart';
 import 'package:tts_mod_vault/src/state/mods/mods.dart';
@@ -82,6 +83,10 @@ final backedUpFilesProvider = Provider<Set<String>>((ref) {
 
 final loaderProvider = Provider<LoaderNotifier>((ref) {
   return LoaderNotifier(ref);
+});
+
+final modOperationsServiceProvider = Provider<ModOperationsService>((ref) {
+  return ModOperationsService(ref);
 });
 
 final modsProvider = AsyncNotifierProvider<ModsStateNotifier, ModsState>(

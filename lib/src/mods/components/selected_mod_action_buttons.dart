@@ -6,13 +6,13 @@ import 'package:path/path.dart' as p;
 import 'package:tts_mod_vault/src/mods/components/components.dart'
     show showUpdateUrlsDialog;
 import 'package:tts_mod_vault/src/state/mod_operations/backup_decision.dart';
-import 'package:tts_mod_vault/src/state/mod_operations/mod_operations_service.dart';
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart' show Mod;
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
         actionInProgressProvider,
         backupProvider,
         directoriesProvider,
+        modOperationsServiceProvider,
         modsProvider,
         selectedModProvider,
         settingsProvider;
@@ -35,7 +35,7 @@ class SelectedModActionButtons extends HookConsumerWidget {
     final actionInProgress = ref.watch(actionInProgressProvider);
     final enableTtsModdersFeatures =
         ref.watch(settingsProvider).enableTtsModdersFeatures;
-    final service = ModOperationsService(ref);
+    final service = ref.watch(modOperationsServiceProvider);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.start,
