@@ -137,7 +137,12 @@ class ModOperationsService {
 
   /// Refresh UI for a single mod (asset counts, backup status)
   Future<void> _refreshModUI(Mod mod) async {
-    await ref.read(modsProvider.notifier).refreshModsInfo([mod]);
+    try {
+      await ref.read(modsProvider.notifier).refreshModsInfo([mod]);
+    } catch (e) {
+      // Ignore errors if widget was disposed during async operation
+      debugPrint('_refreshModUI error (likely widget disposed): $e');
+    }
   }
 
   /// Determine what backup action to take based on mod state and config

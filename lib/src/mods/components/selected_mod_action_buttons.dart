@@ -65,6 +65,9 @@ class SelectedModActionButtons extends HookConsumerWidget {
             final config = BackupConfig.interactive(force: forceBackup.value);
             final decision = await service.backupMod(selectedMod, config);
 
+            // Check if widget is still mounted before showing dialogs
+            if (!context.mounted) return;
+
             if (decision == null || !decision.needsConfirmation) {
               // Backup completed or skipped
               return;
