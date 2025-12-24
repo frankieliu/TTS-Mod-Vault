@@ -103,40 +103,48 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
         continue;
       }
 
-      String modBackupFolder = selectedBackupFolder;
-
-      if (mod.backupStatus != ExistingBackupStatusEnum.noBackup) {
-        switch (backupBehavior) {
-          case BulkBackupBehaviorEnum.skip:
-            continue;
-
-          case BulkBackupBehaviorEnum.replace:
-            if (mod.backup != null) {
-              modBackupFolder = p.dirname(mod.backup!.filepath);
-            }
-            break;
-
-          case BulkBackupBehaviorEnum.replaceIfOutOfDate:
-            if (mod.backupStatus != ExistingBackupStatusEnum.outOfDate) {
-              continue;
-            }
-            if (mod.backup != null) {
-              modBackupFolder = p.dirname(mod.backup!.filepath);
-            }
-            break;
-        }
-      }
-
-      debugPrint('Backing up: ${mod.saveName}');
+      debugPrint('Checking backup status for: ${mod.saveName}');
 
       state = state.copyWith(
           currentModNumber: mods.indexOf(mod) + 1,
           statusMessage:
               'Backing up all ${ref.read(selectedModTypeProvider).label}s (${mods.indexOf(mod) + 1}/${state.totalModNumber})');
 
+      // Get complete mod with updated backup status (includes CRC32/file checks)
       final modUrls = await ref.read(modsProvider.notifier).getUrlsByMod(mod);
       final completeMod =
           await ref.read(modsProvider.notifier).getCompleteMod(mod, modUrls);
+
+      String modBackupFolder = selectedBackupFolder;
+
+      // Check backup status using the complete mod (with CRC32/file comparison)
+      if (completeMod.backupStatus != ExistingBackupStatusEnum.noBackup) {
+        switch (backupBehavior) {
+          case BulkBackupBehaviorEnum.skip:
+            debugPrint('  Skipping (backup exists)');
+            continue;
+
+          case BulkBackupBehaviorEnum.replace:
+            debugPrint('  Replacing existing backup');
+            if (completeMod.backup != null) {
+              modBackupFolder = p.dirname(completeMod.backup!.filepath);
+            }
+            break;
+
+          case BulkBackupBehaviorEnum.replaceIfOutOfDate:
+            if (completeMod.backupStatus != ExistingBackupStatusEnum.outOfDate) {
+              debugPrint('  Skipping (backup is up to date)');
+              continue;
+            }
+            debugPrint('  Replacing (backup is out of date - files changed or CRC32 mismatch)');
+            if (completeMod.backup != null) {
+              modBackupFolder = p.dirname(completeMod.backup!.filepath);
+            }
+            break;
+        }
+      }
+
+      debugPrint('Backing up: ${mod.saveName}');
 
       ref.read(modsProvider.notifier).setSelectedMod(completeMod);
       await ref
@@ -191,37 +199,49 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
         continue;
       }
 
+      // Get updated mod after download (backup status needs to be re-checked with downloaded files)
+      final selectedMod = ref.read(selectedModProvider);
+      if (selectedMod == null) {
+        continue;
+      }
+
+      // Re-calculate backup status after download with CRC32/file checks
+      final updatedModUrls = await ref.read(modsProvider.notifier).getUrlsByMod(selectedMod);
+      final updatedMod = await ref.read(modsProvider.notifier).getCompleteMod(selectedMod, updatedModUrls);
+
       String modBackupFolder = selectedBackupFolder;
 
-      if (mod.backupStatus != ExistingBackupStatusEnum.noBackup) {
+      // Check backup status using updated mod (with CRC32/file comparison)
+      if (updatedMod.backupStatus != ExistingBackupStatusEnum.noBackup) {
         switch (backupBehavior) {
           case BulkBackupBehaviorEnum.skip:
+            debugPrint('  Skipping backup (backup exists)');
             continue;
 
           case BulkBackupBehaviorEnum.replace:
-            if (mod.backup != null) {
-              modBackupFolder = p.dirname(mod.backup!.filepath);
+            debugPrint('  Replacing existing backup');
+            if (updatedMod.backup != null) {
+              modBackupFolder = p.dirname(updatedMod.backup!.filepath);
             }
             break;
 
           case BulkBackupBehaviorEnum.replaceIfOutOfDate:
-            if (mod.backupStatus != ExistingBackupStatusEnum.outOfDate) {
+            if (updatedMod.backupStatus != ExistingBackupStatusEnum.outOfDate) {
+              debugPrint('  Skipping backup (backup is up to date)');
               continue;
             }
-            if (mod.backup != null) {
-              modBackupFolder = p.dirname(mod.backup!.filepath);
+            debugPrint('  Replacing backup (backup is out of date - files changed or CRC32 mismatch)');
+            if (updatedMod.backup != null) {
+              modBackupFolder = p.dirname(updatedMod.backup!.filepath);
             }
             break;
         }
       }
 
-      final selectedMod = ref.read(selectedModProvider);
-      if (selectedMod != null) {
-        await ref
-            .read(backupProvider.notifier)
-            .createBackup(selectedMod, modBackupFolder);
-        await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
-      }
+      await ref
+          .read(backupProvider.notifier)
+          .createBackup(updatedMod, modBackupFolder);
+      await ref.read(modsProvider.notifier).updateSelectedMod(updatedMod);
     }
 
     _resetState();

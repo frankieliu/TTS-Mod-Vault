@@ -38,6 +38,7 @@ import 'package:tts_mod_vault/src/state/mods/mods_state.dart' show ModsState;
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
         backedUpFilesProvider,
+        backupProvider,
         directoriesProvider,
         existingAssetListsProvider,
         existingBackupsProvider,
@@ -693,23 +694,37 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       ref.read(existingBackupsProvider.notifier).addBackup(backup);
     }
 
-    final backupStatus = backup == null
-        ? ExistingBackupStatusEnum.noBackup
-        : (mod.dateTimeStamp == null ||
-                backup.lastModifiedTimestamp > int.parse(mod.dateTimeStamp!))
-            ? ExistingBackupStatusEnum.upToDate
-            : ExistingBackupStatusEnum.outOfDate;
-
     final assetLists = _getAssetListsFromUrls(jsonURLs);
 
-    return mod.copyWith(
-      backup: backup,
-      backupStatus: backupStatus,
+    // Create mod with asset lists so shouldForceBackup can check files
+    final modWithAssets = mod.copyWith(
       assetLists: assetLists.$1,
       assetCount: assetLists.$2,
       existingAssetCount: assetLists.$3,
       missingAssetCount: assetLists.$2 - assetLists.$3,
       failedAssetCount: assetLists.$4,
+    );
+
+    // Calculate backup status using comprehensive logic
+    ExistingBackupStatusEnum backupStatus;
+    if (backup == null) {
+      backupStatus = ExistingBackupStatusEnum.noBackup;
+    } else {
+      // Check if files have changed (new files or CRC32 mismatch)
+      final shouldForce = ref.read(backupProvider.notifier).shouldForceBackup(modWithAssets);
+
+      if (shouldForce) {
+        // Files have changed - backup is out of date
+        backupStatus = ExistingBackupStatusEnum.outOfDate;
+      } else {
+        // No file changes detected - backup is up to date
+        backupStatus = ExistingBackupStatusEnum.upToDate;
+      }
+    }
+
+    return modWithAssets.copyWith(
+      backup: backup,
+      backupStatus: backupStatus,
     );
   }
 
