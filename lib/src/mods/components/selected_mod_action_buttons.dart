@@ -47,10 +47,7 @@ class SelectedModActionButtons extends HookConsumerWidget {
               ? () async {
                   if (actionInProgress) return;
 
-                  await service.downloadMod(selectedMod, updateUI: false);
-
-                  // Explicitly update UI from widget context
-                  await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
+                  await service.downloadMod(selectedMod, updateUI: true);
                 }
               : null,
           child: const Text('Download'),
@@ -64,6 +61,13 @@ class SelectedModActionButtons extends HookConsumerWidget {
             debugPrint('Current backup: ${selectedMod.backup?.filepath ?? "null"}');
             debugPrint('Current backup status: ${selectedMod.backupStatus}');
 
+            // Get fresh mod with latest backup info before making decisions
+            final urls = await ref.read(modsProvider.notifier).getUrlsByMod(selectedMod);
+            final freshMod = await ref.read(modsProvider.notifier).getCompleteMod(selectedMod, urls);
+
+            debugPrint('After refresh - backup: ${freshMod.backup?.filepath ?? "null"}');
+            debugPrint('After refresh - backup status: ${freshMod.backupStatus}');
+
             final showWarningMessage =
                 ref.read(settingsProvider).showBackupState &&
                     ref.read(directoriesProvider).backupsDir.isEmpty;
@@ -75,39 +79,22 @@ class SelectedModActionButtons extends HookConsumerWidget {
             debugPrint('Calling service.backupMod()...');
 
             final decision = await service.backupMod(
-              selectedMod,
+              freshMod, // Use fresh mod with updated backup info
               config,
-              updateUI: false, // Don't update from service (widget context)
+              updateUI: true, // Let service handle UI update (will catch disposal errors)
             );
 
             debugPrint('service.backupMod() returned, decision: ${decision?.reason ?? "null (backup completed)"}');
 
             if (decision == null) {
-              // Backup completed - update UI from widget context
-              debugPrint('Backup completed, calling updateSelectedMod()...');
-              try {
-                await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
-                debugPrint('updateSelectedMod() completed successfully');
-
-                // Re-read the updated mod to verify backup was set
-                final updatedMod = ref.read(selectedModProvider);
-                debugPrint('After update - backup: ${updatedMod?.backup?.filepath ?? "null"}');
-                debugPrint('After update - backup status: ${updatedMod?.backupStatus}');
-              } catch (e) {
-                debugPrint('ERROR in updateSelectedMod(): $e');
-              }
+              // Backup completed - service already updated UI
+              debugPrint('Backup completed successfully');
               return;
             }
 
             if (!decision.needsConfirmation) {
-              // Backup skipped or completed - update UI from widget context
-              debugPrint('Backup skipped/completed (no confirmation), calling updateSelectedMod()...');
-              try {
-                await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
-                debugPrint('updateSelectedMod() completed successfully');
-              } catch (e) {
-                debugPrint('ERROR in updateSelectedMod(): $e');
-              }
+              // Backup skipped - no UI update needed
+              debugPrint('Backup skipped or completed (no confirmation needed)');
               return;
             }
 
@@ -133,8 +120,7 @@ class SelectedModActionButtons extends HookConsumerWidget {
                     targetFolder: decision.targetFolder,
                     force: true,
                   );
-                  await service.backupMod(selectedMod, backupConfig, updateUI: false);
-                  await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
+                  await service.backupMod(freshMod, backupConfig, updateUI: true);
                 },
                 () {},
               );
@@ -153,15 +139,18 @@ class SelectedModActionButtons extends HookConsumerWidget {
                     targetFolder: decision.targetFolder,
                     force: true,
                   );
-                  await service.backupMod(selectedMod, backupConfig, updateUI: false);
-                  await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
+                  await service.backupMod(freshMod, backupConfig, updateUI: true);
                 },
                 () async {
                   // Just update metadata without creating new backup
-                  await ref
-                      .read(backupProvider.notifier)
-                      .updateExistingBackupMetadata(selectedMod);
-                  await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
+                  try {
+                    await ref
+                        .read(backupProvider.notifier)
+                        .updateExistingBackupMetadata(freshMod);
+                    await ref.read(modsProvider.notifier).updateSelectedMod(freshMod);
+                  } catch (e) {
+                    debugPrint('Error updating backup metadata: $e');
+                  }
                 },
               );
             }

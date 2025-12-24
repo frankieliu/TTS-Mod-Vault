@@ -10,7 +10,8 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         backupProvider,
         directoriesProvider,
         downloadProvider,
-        modsProvider;
+        modsProvider,
+        selectedModProvider;
 
 /// Unified service for all mod operations (download, backup, combined)
 /// Consolidates logic previously duplicated between single-mod and bulk operations
@@ -144,9 +145,17 @@ class ModOperationsService {
   Future<void> _refreshModUI(Mod mod) async {
     try {
       await ref.read(modsProvider.notifier).refreshModsInfo([mod]);
+
+      // Also update the selected mod to ensure UI reflects the change
+      final selectedMod = ref.read(selectedModProvider);
+      if (selectedMod?.jsonFilePath == mod.jsonFilePath) {
+        await ref.read(modsProvider.notifier).updateSelectedMod(mod);
+      }
     } catch (e) {
       // Ignore errors if widget was disposed during async operation
       debugPrint('_refreshModUI error (likely widget disposed): $e');
+      // Even if update fails, the state in existingBackupsProvider is correct
+      // UI will update on next natural rebuild
     }
   }
 
