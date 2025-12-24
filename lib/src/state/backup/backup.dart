@@ -27,6 +27,7 @@ import 'package:tts_mod_vault/src/state/enums/asset_type_enum.dart'
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart' show Mod;
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
+        backedUpFilesProvider,
         bulkActionsProvider,
         directoriesProvider,
         existingBackupsProvider,
@@ -104,6 +105,10 @@ class BackupNotifier extends StateNotifier<BackupState> {
         final metadata = BackupFileMetadata(files: filesMap);
         await storage.saveBackupFileMetadata(backupFileName, metadata);
         debugPrint('Updated metadata for $backupFileName with ${filesMap.length} files (including CRC32 from ZIP)');
+
+        // Invalidate backedUpFilesProvider so it recalculates with new metadata
+        ref.invalidate(backedUpFilesProvider);
+        debugPrint('Invalidated backedUpFilesProvider after metadata update');
       }
 
       state = state.copyWith(
@@ -249,6 +254,10 @@ class BackupNotifier extends StateNotifier<BackupState> {
               targetBackupFilePath,
               backupFileName,
             );
+
+            // Invalidate backedUpFilesProvider so it recalculates with new metadata
+            ref.invalidate(backedUpFilesProvider);
+            debugPrint('Invalidated backedUpFilesProvider after backup creation');
           }
 
           if (ref.read(bulkActionsProvider).status ==

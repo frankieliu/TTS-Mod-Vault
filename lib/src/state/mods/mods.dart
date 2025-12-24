@@ -727,6 +727,7 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
   List<Asset> _getAssetsByType(List<String> urls, AssetTypeEnum type) {
     final assetMap = _getAssetMapByType(type);
     final failedAssets = ref.read(failedAssetsProvider).failedAssets;
+    final backedUpFiles = ref.read(backedUpFilesProvider);
 
     return urls.map((url) {
       final normalizedUrl = url.replaceAll(oldCloudUrl, newSteamUserContentUrl);
@@ -736,12 +737,16 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       // Check if this asset has failed
       final failedAsset = failedAssets[normalizedUrl];
 
+      // Check if this asset is backed up
+      final isBackedUp = backedUpFiles.contains(filename); // O(1) lookup!
+
       return Asset(
         url: normalizedUrl,
         fileExists: filepath != null,
         filePath: filepath,
         hasFailed: failedAsset != null,
         errorType: failedAsset?.errorType,
+        isBackedUp: isBackedUp,
       );
     }).toList();
   }
