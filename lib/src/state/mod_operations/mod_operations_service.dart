@@ -208,11 +208,15 @@ class ModOperationsService {
         final shouldForce =
             ref.read(backupProvider.notifier).shouldForceBackup(mod);
 
+        if (!shouldForce) {
+          // Backup is up to date, no need to replace
+          return BackupDecision.skip('Backup is up to date');
+        }
+
+        // Files have changed, need user confirmation
         return BackupDecision.backup(
           folder: p.dirname(mod.backup!.filepath),
-          reason: shouldForce
-              ? 'Files changed - needs confirmation'
-              : 'Backup exists - needs user choice',
+          reason: 'Files changed - needs confirmation',
           needsConfirmation: true,
         );
     }

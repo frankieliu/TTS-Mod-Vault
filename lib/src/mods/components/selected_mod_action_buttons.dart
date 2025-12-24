@@ -88,13 +88,17 @@ class SelectedModActionButtons extends HookConsumerWidget {
 
             if (decision == null) {
               // Backup completed - service already updated UI
-              debugPrint('Backup completed successfully');
+              debugPrint('✓ Backup completed successfully');
               return;
             }
 
             if (!decision.needsConfirmation) {
               // Backup skipped - no UI update needed
-              debugPrint('Backup skipped or completed (no confirmation needed)');
+              if (!decision.shouldBackup) {
+                debugPrint('✓ Backup skipped: ${decision.reason}');
+              } else {
+                debugPrint('✓ Backup completed: ${decision.reason}');
+              }
               return;
             }
 
@@ -125,9 +129,8 @@ class SelectedModActionButtons extends HookConsumerWidget {
                 () {},
               );
             } else {
-              // Backup exists, no changes, Force not checked
-              // Don't show dialog - user should use Force checkbox if they want to replace
-              debugPrint('Backup exists and up to date. Use Force checkbox to replace.');
+              // Should never reach here now, but log just in case
+              debugPrint('Unexpected: needsConfirmation=true but no files changed');
             }
           },
           child: const Text('Backup'),
