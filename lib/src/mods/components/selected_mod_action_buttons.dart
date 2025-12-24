@@ -5,15 +5,14 @@ import 'package:hooks_riverpod/hooks_riverpod.dart'
 import 'package:path/path.dart' as p;
 import 'package:tts_mod_vault/src/mods/components/components.dart'
     show showUpdateUrlsDialog;
-import 'package:tts_mod_vault/src/state/backup/backup_status_enum.dart'
-    show ExistingBackupStatusEnum;
+import 'package:tts_mod_vault/src/state/mod_operations/backup_decision.dart';
+import 'package:tts_mod_vault/src/state/mod_operations/mod_operations_service.dart';
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart' show Mod;
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
         actionInProgressProvider,
         backupProvider,
         directoriesProvider,
-        downloadProvider,
         modsProvider,
         settingsProvider;
 import 'package:tts_mod_vault/src/utils.dart' show showConfirmDialog;
@@ -32,12 +31,10 @@ class SelectedModActionButtons extends HookConsumerWidget {
       return selectedMod.getAllAssets().any((asset) => !asset.fileExists);
     }, [selectedMod]);
 
-    final modsNotifier = ref.watch(modsProvider.notifier);
-    final backupNotifier = ref.watch(backupProvider.notifier);
-    final downloadNotifier = ref.watch(downloadProvider.notifier);
     final actionInProgress = ref.watch(actionInProgressProvider);
     final enableTtsModdersFeatures =
         ref.watch(settingsProvider).enableTtsModdersFeatures;
+    final service = ModOperationsService(ref);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.start,
@@ -47,21 +44,16 @@ class SelectedModActionButtons extends HookConsumerWidget {
         ElevatedButton(
           onPressed: hasMissingFiles
               ? () async {
-                  if (actionInProgress) {
-                    return;
-                  }
+                  if (actionInProgress) return;
 
-                  await downloadNotifier.downloadAllFiles(selectedMod);
-                  await modsNotifier.updateSelectedMod(selectedMod);
+                  await service.downloadMod(selectedMod);
                 }
               : null,
           child: const Text('Download'),
         ),
         ElevatedButton(
           onPressed: () async {
-            if (actionInProgress) {
-              return;
-            }
+            if (actionInProgress) return;
 
             final showWarningMessage =
                 ref.read(settingsProvider).showBackupState &&
@@ -70,72 +62,60 @@ class SelectedModActionButtons extends HookConsumerWidget {
             final setBackupFolderMessage =
                 "Set a backup folder in Settings to show backup state after a restart or data refresh\nOr disable backup state feature in Settings to hide this warning";
 
-            if (selectedMod.backupStatus == ExistingBackupStatusEnum.noBackup ||
-                forceBackup.value) {
-              // No existing backup OR force is checked → Create new backup
-              if (showWarningMessage) {
-                showConfirmDialog(
-                  context,
-                  "$setBackupFolderMessage\n\nContinue with creating a backup?",
-                  () async {
-                    await backupNotifier.createBackup(selectedMod);
-                    await modsNotifier.updateSelectedMod(selectedMod);
-                  },
-                  () {},
-                );
-              } else {
-                await backupNotifier.createBackup(selectedMod);
-                await modsNotifier.updateSelectedMod(selectedMod);
-              }
+            final config = BackupConfig.interactive(force: forceBackup.value);
+            final decision = await service.backupMod(selectedMod, config);
+
+            if (decision == null || !decision.needsConfirmation) {
+              // Backup completed or skipped
               return;
             }
 
-            // Backup exists and force not checked → Check if backup should be forced
-            final shouldForce = backupNotifier.shouldForceBackup(selectedMod);
-
-            if (shouldForce) {
-              // Downloaded files have changed → Auto-force backup creation
-              String forceMessage =
-                  'Downloaded files have changed (new files or CRC32 mismatch).\n\nCreating new backup with updated files.';
+            // Interactive mode - show confirmation dialog
+            if (decision.reason.contains('Files changed')) {
+              // Files have changed - auto-force backup
               String message = showWarningMessage
-                  ? '$setBackupFolderMessage\n\n$forceMessage'
-                  : forceMessage;
+                  ? '$setBackupFolderMessage\n\n${decision.reason}\n\nCreating new backup with updated files.'
+                  : '${decision.reason}\n\nCreating new backup with updated files.';
 
               showConfirmDialog(
                 context,
                 message,
                 () async {
-                  final backupFolder = p.dirname(selectedMod.backup!.filepath);
-                  await backupNotifier.createBackup(selectedMod, backupFolder);
-                  await modsNotifier.updateSelectedMod(selectedMod);
+                  final backupConfig = BackupConfig(
+                    behavior: BackupBehavior.replace,
+                    targetFolder: decision.targetFolder,
+                    force: true,
+                  );
+                  await service.backupMod(selectedMod, backupConfig);
                 },
                 () {},
               );
-              return;
+            } else {
+              // Backup exists, no changes - ask user
+              String message = showWarningMessage
+                  ? '$setBackupFolderMessage\n\nBackup already exists. Replace existing file?'
+                  : 'Backup already exists. Replace existing file?';
+
+              showConfirmDialog(
+                context,
+                message,
+                () async {
+                  final backupConfig = BackupConfig(
+                    behavior: BackupBehavior.replace,
+                    targetFolder: decision.targetFolder,
+                    force: true,
+                  );
+                  await service.backupMod(selectedMod, backupConfig);
+                },
+                () async {
+                  // Just update metadata without creating new backup
+                  await ref
+                      .read(backupProvider.notifier)
+                      .updateExistingBackupMetadata(selectedMod);
+                  await ref.read(modsProvider.notifier).updateSelectedMod(selectedMod);
+                },
+              );
             }
-
-            // Backup exists, no changes detected → Ask what to do
-            String backupMessage =
-                'Backup already exists. Replace existing file?';
-            String message = showWarningMessage
-                ? '$setBackupFolderMessage\n\n$backupMessage'
-                : backupMessage;
-
-            showConfirmDialog(
-              context,
-              message,
-              () async {
-                final backupFolder = p.dirname(selectedMod.backup!.filepath);
-
-                await backupNotifier.createBackup(selectedMod, backupFolder);
-                await modsNotifier.updateSelectedMod(selectedMod);
-              },
-              () async {
-                // Just update metadata without creating new backup
-                await backupNotifier.updateExistingBackupMetadata(selectedMod);
-                await modsNotifier.updateSelectedMod(selectedMod);
-              },
-            );
           },
           child: const Text('Backup'),
         ),
@@ -155,9 +135,7 @@ class SelectedModActionButtons extends HookConsumerWidget {
         if (enableTtsModdersFeatures)
           ElevatedButton(
             onPressed: () async {
-              if (actionInProgress) {
-                return;
-              }
+              if (actionInProgress) return;
 
               showUpdateUrlsDialog(context, ref, selectedMod);
             },

@@ -8,6 +8,8 @@ import 'package:tts_mod_vault/src/state/backup/backup_status_enum.dart'
     show ExistingBackupStatusEnum;
 import 'package:tts_mod_vault/src/state/bulk_actions/bulk_actions_state.dart'
     show BulkActionsState, BulkActionsStatusEnum, BulkBackupBehaviorEnum;
+import 'package:tts_mod_vault/src/state/mod_operations/backup_decision.dart';
+import 'package:tts_mod_vault/src/state/mod_operations/mod_operations_service.dart';
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart' show Mod;
 import 'package:tts_mod_vault/src/state/mods/mods_isolates.dart';
 import 'package:tts_mod_vault/src/state/provider.dart'
@@ -55,24 +57,22 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       totalModNumber: mods.length,
     );
 
-    for (final mod in mods) {
-      if (state.cancelledBulkAction) {
-        continue;
-      }
+    final service = ModOperationsService(ref);
 
-      debugPrint('Downloading: ${mod.saveName}');
+    await service.downloadMods(
+      mods,
+      onProgress: (current, total, mod) {
+        if (state.cancelledBulkAction) return;
 
-      state = state.copyWith(
-          currentModNumber: mods.indexOf(mod) + 1,
+        state = state.copyWith(
+          currentModNumber: current,
           statusMessage:
-              'Downloading all ${ref.read(selectedModTypeProvider).label}s (${mods.indexOf(mod) + 1}/${state.totalModNumber})');
+              'Downloading all ${ref.read(selectedModTypeProvider).label}s ($current/$total)',
+        );
 
-      ref.read(modsProvider.notifier).setSelectedMod(mod);
-      await ref.read(downloadProvider.notifier).downloadAllFiles(mod);
-    }
-
-    // After all downloads complete, refresh backup info to update file count comparison
-    await _refreshBackupInfo(mods);
+        ref.read(modsProvider.notifier).setSelectedMod(mod);
+      },
+    );
 
     _resetState();
     ref.read(downloadProvider.notifier).resetState();
@@ -97,62 +97,27 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       return;
     }
 
-    for (final mod in mods) {
-      if (state.cancelledBulkAction) {
-        continue;
-      }
+    final service = ModOperationsService(ref);
+    final config = BackupConfig.bulk(
+      behavior: backupBehavior,
+      folder: selectedBackupFolder,
+    );
 
-      debugPrint('Checking backup status for: ${mod.saveName}');
+    await service.backupMods(
+      mods,
+      config,
+      onProgress: (current, total, mod) {
+        if (state.cancelledBulkAction) return;
 
-      state = state.copyWith(
-          currentModNumber: mods.indexOf(mod) + 1,
+        state = state.copyWith(
+          currentModNumber: current,
           statusMessage:
-              'Backing up all ${ref.read(selectedModTypeProvider).label}s (${mods.indexOf(mod) + 1}/${state.totalModNumber})');
+              'Backing up all ${ref.read(selectedModTypeProvider).label}s ($current/$total)',
+        );
 
-      // Get complete mod with updated backup status (includes CRC32/file checks)
-      final modUrls = await ref.read(modsProvider.notifier).getUrlsByMod(mod);
-      final completeMod =
-          await ref.read(modsProvider.notifier).getCompleteMod(mod, modUrls);
-
-      String modBackupFolder = selectedBackupFolder;
-
-      // Check backup status using the complete mod (with CRC32/file comparison)
-      if (completeMod.backupStatus != ExistingBackupStatusEnum.noBackup) {
-        switch (backupBehavior) {
-          case BulkBackupBehaviorEnum.skip:
-            debugPrint('  Skipping (backup exists)');
-            continue;
-
-          case BulkBackupBehaviorEnum.replace:
-            debugPrint('  Replacing existing backup');
-            if (completeMod.backup != null) {
-              modBackupFolder = p.dirname(completeMod.backup!.filepath);
-            }
-            break;
-
-          case BulkBackupBehaviorEnum.replaceIfOutOfDate:
-            if (completeMod.backupStatus != ExistingBackupStatusEnum.outOfDate) {
-              debugPrint('  Skipping (backup is up to date)');
-              continue;
-            }
-            debugPrint('  Replacing (backup is out of date - files changed or CRC32 mismatch)');
-            if (completeMod.backup != null) {
-              modBackupFolder = p.dirname(completeMod.backup!.filepath);
-            }
-            break;
-        }
-      }
-
-      debugPrint('Backing up: ${mod.saveName}');
-
-      ref.read(modsProvider.notifier).setSelectedMod(completeMod);
-      await ref
-          .read(backupProvider.notifier)
-          .createBackup(completeMod, modBackupFolder);
-    }
-
-    // After all backups complete, update the affected mods with their new backup info
-    await _refreshBackupInfo(mods);
+        ref.read(modsProvider.notifier).setSelectedMod(mod);
+      },
+    );
 
     _resetState();
   }
@@ -176,66 +141,27 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       return;
     }
 
-    for (final mod in mods) {
-      if (state.cancelledBulkAction) {
-        continue;
-      }
+    final service = ModOperationsService(ref);
+    final config = BackupConfig.bulk(
+      behavior: backupBehavior,
+      folder: selectedBackupFolder,
+    );
 
-      debugPrint('Downloading & backing up: ${mod.saveName}');
+    await service.downloadAndBackupMods(
+      mods,
+      config,
+      onProgress: (current, total, mod, phase) {
+        if (state.cancelledBulkAction) return;
 
-      state = state.copyWith(
-          currentModNumber: mods.indexOf(mod) + 1,
+        state = state.copyWith(
+          currentModNumber: current,
           statusMessage:
-              'Downloading & backing up all ${ref.read(selectedModTypeProvider).label}s (${mods.indexOf(mod) + 1}/${state.totalModNumber})');
+              '$phase all ${ref.read(selectedModTypeProvider).label}s ($current/$total)',
+        );
 
-      // Download files first
-      ref.read(modsProvider.notifier).setSelectedMod(mod);
-      await ref.read(downloadProvider.notifier).downloadAllFiles(mod);
-
-      if (state.cancelledBulkAction) {
-        continue;
-      }
-
-      // After download, get updated mod with fresh CRC32 data to check if backup is needed
-      final modUrls = await ref.read(modsProvider.notifier).getUrlsByMod(mod);
-      final updatedMod = await ref.read(modsProvider.notifier).getCompleteMod(mod, modUrls);
-
-      String modBackupFolder = selectedBackupFolder;
-
-      // Check backup status using updated mod (with CRC32/file comparison)
-      if (updatedMod.backupStatus != ExistingBackupStatusEnum.noBackup) {
-        switch (backupBehavior) {
-          case BulkBackupBehaviorEnum.skip:
-            debugPrint('  Skipping backup (backup exists)');
-            continue;
-
-          case BulkBackupBehaviorEnum.replace:
-            debugPrint('  Replacing existing backup');
-            if (updatedMod.backup != null) {
-              modBackupFolder = p.dirname(updatedMod.backup!.filepath);
-            }
-            break;
-
-          case BulkBackupBehaviorEnum.replaceIfOutOfDate:
-            if (updatedMod.backupStatus != ExistingBackupStatusEnum.outOfDate) {
-              debugPrint('  Skipping backup (backup is up to date)');
-              continue;
-            }
-            debugPrint('  Replacing backup (backup is out of date - files changed or CRC32 mismatch)');
-            if (updatedMod.backup != null) {
-              modBackupFolder = p.dirname(updatedMod.backup!.filepath);
-            }
-            break;
-        }
-      }
-
-      await ref
-          .read(backupProvider.notifier)
-          .createBackup(updatedMod, modBackupFolder);
-    }
-
-    // After all backups complete, update the affected mods with their new backup info
-    await _refreshBackupInfo(mods);
+        ref.read(modsProvider.notifier).setSelectedMod(mod);
+      },
+    );
 
     _resetState();
     ref.read(downloadProvider.notifier).resetState();
@@ -355,17 +281,5 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       statusMessage:
           "Cancelling download & backup of all ${ref.read(selectedModTypeProvider).label}s",
     );
-  }
-
-  // Helper method to refresh backup and asset info for mods after bulk operations
-  Future<void> _refreshBackupInfo(List<Mod> mods) async {
-    if (mods.isEmpty) return;
-
-    debugPrint('Refreshing backup and asset info for ${mods.length} mods');
-
-    // Call the efficient refresh method in ModsNotifier
-    await ref.read(modsProvider.notifier).refreshModsInfo(mods);
-
-    debugPrint('Backup and asset info refresh complete');
   }
 }
