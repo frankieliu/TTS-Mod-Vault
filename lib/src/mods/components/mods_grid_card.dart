@@ -17,6 +17,7 @@ import 'package:tts_mod_vault/src/state/mods/mod_model.dart'
 import 'package:tts_mod_vault/src/state/provider.dart'
     show
         actionInProgressProvider,
+        filteredModsProvider,
         modsProvider,
         selectedModProvider,
         multiSelectModsProvider,
@@ -84,6 +85,10 @@ class ModsGridCard extends HookConsumerWidget {
               (HardwareKeyboard.instance.isControlPressed ||
                   HardwareKeyboard.instance.isMetaPressed);
 
+          final isShiftPressed = event.kind == PointerDeviceKind.mouse &&
+              (event.buttons == kPrimaryButton) &&
+              HardwareKeyboard.instance.isShiftPressed;
+
           if (event.buttons == kSecondaryButton) {
             // Right-click
 
@@ -91,7 +96,38 @@ class ModsGridCard extends HookConsumerWidget {
             showModContextMenu(context, ref, event.position, mod);
           } else if (event.buttons == kPrimaryButton) {
             // Left-click
-            if (isCtrlPressed) {
+            if (isShiftPressed) {
+              // Shift+Click: Select range from last selected to this mod
+              final selectedMod = ref.read(selectedModProvider);
+              final allMods = ref.read(filteredModsProvider);
+
+              if (selectedMod != null) {
+                // Find indices of the last selected mod and the clicked mod
+                final lastIndex = allMods.indexWhere(
+                    (m) => m.jsonFilePath == selectedMod.jsonFilePath);
+                final currentIndex =
+                    allMods.indexWhere((m) => m.jsonFilePath == mod.jsonFilePath);
+
+                if (lastIndex != -1 && currentIndex != -1) {
+                  // Select all mods between lastIndex and currentIndex
+                  final startIndex =
+                      lastIndex < currentIndex ? lastIndex : currentIndex;
+                  final endIndex =
+                      lastIndex < currentIndex ? currentIndex : lastIndex;
+
+                  final rangeSelection = <String>{};
+                  for (int i = startIndex; i <= endIndex; i++) {
+                    rangeSelection.add(allMods[i].jsonFilePath);
+                  }
+
+                  ref.read(multiSelectModsProvider.notifier).state =
+                      rangeSelection;
+                }
+              } else {
+                // No previous selection, just select this mod
+                ref.read(modsProvider.notifier).setSelectedMod(mod);
+              }
+            } else if (isCtrlPressed) {
               // Ctrl+Click: Toggle multi-selection
               final currentSelected = ref.read(multiSelectModsProvider);
               final newSelected = Set<String>.from(currentSelected);
@@ -104,7 +140,8 @@ class ModsGridCard extends HookConsumerWidget {
 
               ref.read(multiSelectModsProvider.notifier).state = newSelected;
             } else {
-              // Normal left-click: Single selection
+              // Normal left-click: Single selection (clears multi-select)
+              ref.read(multiSelectModsProvider.notifier).state = {};
               ref.read(modsProvider.notifier).setSelectedMod(mod);
             }
           }
