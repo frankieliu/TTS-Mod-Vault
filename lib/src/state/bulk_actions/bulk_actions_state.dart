@@ -9,7 +9,7 @@ enum BulkActionsStatusEnum {
 enum BulkBackupBehaviorEnum {
   skip('Skip'),
   replace('Replace'),
-  replaceIfOutOfDate('Replace if out of date');
+  replaceIfOutOfDate('Replace if necessary');
 
   final String label;
 

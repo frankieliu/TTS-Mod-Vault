@@ -234,3 +234,44 @@ This ensures backups contain:
 5. Run "Replace if out of date" again
 6. Verify it skips (because backup is now current)
 7. Verify old files are preserved in new backup
+
+---
+
+## 3. UI Wording Improvement - Bulk Backup Dialog
+
+### Change Made
+Updated the bulk backup dialog option from "Replace if out of date" to "Replace if necessary" to better reflect the comprehensive CRC32/file comparison logic.
+
+### File Modified
+
+#### `lib/src/state/bulk_actions/bulk_actions_state.dart`
+**Line 12**: Changed enum label
+```dart
+enum BulkBackupBehaviorEnum {
+  skip('Skip'),
+  replace('Replace'),
+  replaceIfOutOfDate('Replace if necessary');  // Changed from 'Replace if out of date'
+  
+  final String label;
+  const BulkBackupBehaviorEnum(this.label);
+}
+```
+
+### Rationale
+
+The previous wording "Replace if out of date" implied only a timestamp comparison, which was misleading after implementing the comprehensive backup status logic.
+
+The new wording "Replace if necessary" better describes that the system:
+- ✅ Checks for new downloaded files not in backup
+- ✅ Detects CRC32 mismatches (file content changes)
+- ✅ Makes an intelligent decision about whether replacement is needed
+
+This change provides clearer communication to users about what the option actually does.
+
+### Dialog Options Summary
+
+| Option | Behavior |
+|--------|----------|
+| **Skip** | Don't backup if a backup already exists |
+| **Replace** | Always replace existing backups |
+| **Replace if necessary** | Only replace if files have changed (new files or CRC32 mismatch) |
