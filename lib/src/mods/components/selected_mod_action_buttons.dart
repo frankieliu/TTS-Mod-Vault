@@ -115,15 +115,18 @@ class SelectedModActionButtons extends HookConsumerWidget {
           },
           child: const Text('Backup'),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Checkbox(
-              value: forceBackup.value,
-              onChanged: (value) => forceBackup.value = value ?? false,
-            ),
-            const Text('Force', style: TextStyle(fontSize: 12)),
-          ],
+        SizedBox(
+          height: 40,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                value: forceBackup.value,
+                onChanged: (value) => forceBackup.value = value ?? false,
+              ),
+              const Text('Force', style: TextStyle(fontSize: 12)),
+            ],
+          ),
         ),
         if (enableTtsModdersFeatures)
           ElevatedButton(
