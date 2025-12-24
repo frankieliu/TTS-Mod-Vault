@@ -78,19 +78,13 @@ class SelectedModActionButtons extends HookConsumerWidget {
                   context,
                   "$setBackupFolderMessage\n\nContinue with creating a backup?",
                   () async {
-                    await backupNotifier.createBackup(
-                      selectedMod,
-                      forceNewBackup: forceBackup.value,
-                    );
+                    await backupNotifier.createBackup(selectedMod);
                     await modsNotifier.updateSelectedMod(selectedMod);
                   },
                   () {},
                 );
               } else {
-                await backupNotifier.createBackup(
-                  selectedMod,
-                  forceNewBackup: forceBackup.value,
-                );
+                await backupNotifier.createBackup(selectedMod);
                 await modsNotifier.updateSelectedMod(selectedMod);
               }
               return;
@@ -109,11 +103,7 @@ class SelectedModActionButtons extends HookConsumerWidget {
               () async {
                 final backupFolder = p.dirname(selectedMod.backup!.filepath);
 
-                await backupNotifier.createBackup(
-                  selectedMod,
-                  backupFolder,
-                  forceNewBackup: true, // Force when explicitly replacing
-                );
+                await backupNotifier.createBackup(selectedMod, backupFolder);
                 await modsNotifier.updateSelectedMod(selectedMod);
               },
               () async {

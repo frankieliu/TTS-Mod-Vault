@@ -160,11 +160,7 @@ class BackupNotifier extends StateNotifier<BackupState> {
     }
   }
 
-  Future<void> createBackup(
-    Mod mod, [
-    String? backupDirectory,
-    bool forceNewBackup = true,
-  ]) async {
+  Future<void> createBackup(Mod mod, [String? backupDirectory]) async {
     state = state.copyWith(
       status: backupDirectory != null && backupDirectory.isNotEmpty
           ? BackupStatusEnum.backingUp
