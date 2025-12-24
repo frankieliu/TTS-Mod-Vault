@@ -489,11 +489,15 @@ class _InfoChip extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 11,
-            color: color ?? Colors.grey[700],
+        Flexible(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              color: color ?? Colors.grey[700],
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ),
       ],
