@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart' show useMemoized;
+import 'package:flutter_hooks/flutter_hooks.dart' show useMemoized, useState;
 import 'package:hooks_riverpod/hooks_riverpod.dart'
     show HookConsumerWidget, WidgetRef;
 import 'package:path/path.dart' as p;
@@ -25,6 +25,7 @@ class SelectedModActionButtons extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final forceBackup = useState(false);
     final hasMissingFiles = useMemoized(() {
       if (selectedMod.assetLists == null) return false;
 
@@ -69,24 +70,33 @@ class SelectedModActionButtons extends HookConsumerWidget {
             final setBackupFolderMessage =
                 "Set a backup folder in Settings to show backup state after a restart or data refresh\nOr disable backup state feature in Settings to hide this warning";
 
-            if (selectedMod.backupStatus == ExistingBackupStatusEnum.noBackup) {
+            if (selectedMod.backupStatus == ExistingBackupStatusEnum.noBackup ||
+                forceBackup.value) {
+              // No existing backup OR force is checked → Create new backup
               if (showWarningMessage) {
                 showConfirmDialog(
                   context,
                   "$setBackupFolderMessage\n\nContinue with creating a backup?",
                   () async {
-                    await backupNotifier.createBackup(selectedMod);
+                    await backupNotifier.createBackup(
+                      selectedMod,
+                      forceNewBackup: forceBackup.value,
+                    );
                     await modsNotifier.updateSelectedMod(selectedMod);
                   },
                   () {},
                 );
               } else {
-                await backupNotifier.createBackup(selectedMod);
+                await backupNotifier.createBackup(
+                  selectedMod,
+                  forceNewBackup: forceBackup.value,
+                );
                 await modsNotifier.updateSelectedMod(selectedMod);
               }
               return;
             }
 
+            // Backup exists and force not checked → Ask what to do
             String backupMessage =
                 'Backup already exists. Replace existing file?';
             String message = showWarningMessage
@@ -99,16 +109,30 @@ class SelectedModActionButtons extends HookConsumerWidget {
               () async {
                 final backupFolder = p.dirname(selectedMod.backup!.filepath);
 
-                await backupNotifier.createBackup(selectedMod, backupFolder);
+                await backupNotifier.createBackup(
+                  selectedMod,
+                  backupFolder,
+                  forceNewBackup: true, // Force when explicitly replacing
+                );
                 await modsNotifier.updateSelectedMod(selectedMod);
               },
               () async {
-                await backupNotifier.createBackup(selectedMod);
+                // Just update metadata without creating new backup
+                await backupNotifier.updateExistingBackupMetadata(selectedMod);
                 await modsNotifier.updateSelectedMod(selectedMod);
               },
             );
           },
           child: const Text('Backup'),
+        ),
+        CheckboxListTile(
+          value: forceBackup.value,
+          onChanged: (value) => forceBackup.value = value ?? false,
+          title: const Text('Force', style: TextStyle(fontSize: 12)),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          visualDensity: VisualDensity.compact,
         ),
         if (enableTtsModdersFeatures)
           ElevatedButton(

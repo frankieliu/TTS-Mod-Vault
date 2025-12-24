@@ -1,7 +1,7 @@
 import 'dart:io' show Directory, File;
 import 'dart:isolate' show ReceivePort, Isolate;
 
-import 'package:archive/archive_io.dart' show ZipFileEncoder;
+import 'package:archive/archive_io.dart' show ZipFileEncoder, ZipDecoder;
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:file_picker/file_picker.dart' show FilePicker;
 import 'package:flutter/material.dart' show debugPrint;
@@ -48,7 +48,123 @@ class BackupNotifier extends StateNotifier<BackupState> {
     state = state.copyWith(message: "");
   }
 
-  Future<void> createBackup(Mod mod, [String? backupDirectory]) async {
+  /// Update metadata from an existing backup file without creating a new backup
+  /// This extracts size, CRC32, and timestamp from the ZIP metadata (fast operation)
+  Future<void> updateExistingBackupMetadata(Mod mod) async {
+    try {
+      final forceBackupJsonFilename =
+          ref.read(settingsProvider).forceBackupJsonFilename;
+      final backupFileName = getBackupFilenameByMod(mod, forceBackupJsonFilename);
+
+      // Find the backup file path
+      final backupFilePath = mod.backup?.filepath;
+      if (backupFilePath == null || backupFilePath.isEmpty) {
+        debugPrint('No backup filepath found for ${mod.saveName}');
+        return;
+      }
+
+      final backupFile = File(backupFilePath);
+      if (!await backupFile.exists()) {
+        debugPrint('Backup file does not exist: $backupFilePath');
+        return;
+      }
+
+      final storage = ref.read(storageProvider);
+
+      // Check if metadata already exists
+      final existingMetadata = storage.getBackupFileMetadata(backupFileName);
+      if (existingMetadata != null && existingMetadata.files.isNotEmpty) {
+        debugPrint('Metadata already exists for $backupFileName, updating any missing fields');
+      }
+
+      debugPrint('Updating metadata from existing backup: $backupFileName');
+
+      // Read and extract metadata from ZIP (includes CRC32 from ZIP metadata)
+      final bytes = await backupFile.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final stat = await backupFile.stat();
+      final backupTimestamp = stat.modified.millisecondsSinceEpoch;
+
+      final Map<String, BackupFileInfo> filesMap = {};
+      for (final zipFile in archive.files) {
+        if (!zipFile.isFile) continue;
+
+        // Use basename WITHOUT extension for consistency
+        final name = p.basenameWithoutExtension(zipFile.name);
+        if (name.isNotEmpty) {
+          filesMap[name] = BackupFileInfo(
+            size: zipFile.size,
+            crc32: zipFile.crc32 ?? 0, // Extract CRC32 from ZIP metadata
+            backedUpAt: backupTimestamp,
+          );
+        }
+      }
+
+      if (filesMap.isNotEmpty) {
+        final metadata = BackupFileMetadata(files: filesMap);
+        await storage.saveBackupFileMetadata(backupFileName, metadata);
+        debugPrint('Updated metadata for $backupFileName with ${filesMap.length} files (including CRC32 from ZIP)');
+      }
+
+      state = state.copyWith(
+        message: 'Metadata updated for existing backup (including CRC32)',
+      );
+    } catch (e) {
+      debugPrint('Error updating metadata from existing backup: $e');
+      state = state.copyWith(message: 'Error updating metadata: $e');
+    }
+  }
+
+  /// Populate metadata from a newly created backup WITH CRC32
+  Future<void> _populateMetadataFromNewBackup(
+    String backupFilePath,
+    String backupFileName,
+  ) async {
+    try {
+      final backupFile = File(backupFilePath);
+      if (!await backupFile.exists()) {
+        return;
+      }
+
+      debugPrint('Extracting full metadata with CRC32 from new backup: $backupFileName');
+
+      // Read and extract metadata from ZIP with CRC32
+      final bytes = await backupFile.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final stat = await backupFile.stat();
+      final backupTimestamp = stat.modified.millisecondsSinceEpoch;
+
+      final Map<String, BackupFileInfo> filesMap = {};
+      for (final zipFile in archive.files) {
+        if (!zipFile.isFile) continue;
+
+        // Use basename WITHOUT extension for consistency
+        final name = p.basenameWithoutExtension(zipFile.name);
+        if (name.isNotEmpty) {
+          filesMap[name] = BackupFileInfo(
+            size: zipFile.size,
+            crc32: zipFile.crc32 ?? 0, // Extract CRC32 from ZIP
+            backedUpAt: backupTimestamp,
+          );
+        }
+      }
+
+      if (filesMap.isNotEmpty) {
+        final metadata = BackupFileMetadata(files: filesMap);
+        await ref.read(storageProvider).saveBackupFileMetadata(backupFileName, metadata);
+        debugPrint('Saved full metadata with CRC32 for $backupFileName with ${filesMap.length} files');
+      }
+    } catch (e) {
+      debugPrint('Error extracting metadata from new backup: $e');
+      // Don't throw - this is optional metadata
+    }
+  }
+
+  Future<void> createBackup(
+    Mod mod, [
+    String? backupDirectory,
+    bool forceNewBackup = true,
+  ]) async {
     state = state.copyWith(
       status: backupDirectory != null && backupDirectory.isNotEmpty
           ? BackupStatusEnum.backingUp
@@ -72,6 +188,12 @@ class BackupNotifier extends StateNotifier<BackupState> {
       return;
     }
 
+    // Determine backup file name and path
+    final forceBackupJsonFilename =
+        ref.read(settingsProvider).forceBackupJsonFilename;
+    final backupFileName = getBackupFilenameByMod(mod, forceBackupJsonFilename);
+    final targetBackupFilePath = p.join(backupDirPath, backupFileName);
+
     state = state.copyWith(status: BackupStatusEnum.backingUp);
 
     try {
@@ -89,11 +211,6 @@ class BackupNotifier extends StateNotifier<BackupState> {
       final totalAssetCount = filePaths.$2;
 
       final receivePort = ReceivePort();
-      final forceBackupJsonFilename =
-          ref.read(settingsProvider).forceBackupJsonFilename;
-      final backupFileName =
-          getBackupFilenameByMod(mod, forceBackupJsonFilename);
-      final targetBackupFilePath = p.join(backupDirPath, backupFileName);
 
       final modsDir = Directory(ref.read(directoriesProvider).modsDir);
       final savesDir = Directory(ref.read(directoriesProvider).savesDir);
@@ -131,25 +248,11 @@ class BackupNotifier extends StateNotifier<BackupState> {
             );
             ref.read(existingBackupsProvider.notifier).addBackup(newBackup);
 
-            // Save backup file metadata
-            if (message.fileMetadata != null) {
-              // Convert Map<String, int> to Map<String, BackupFileInfo>
-              final timestamp = DateTime.now().millisecondsSinceEpoch;
-              final filesMap = message.fileMetadata!.map(
-                (filename, size) => MapEntry(
-                  p.basenameWithoutExtension(filename),
-                  BackupFileInfo(
-                    size: size,
-                    crc32: 0, // Will be updated when metadata is extracted from ZIP
-                    backedUpAt: timestamp,
-                  ),
-                ),
-              );
-              final metadata = BackupFileMetadata(files: filesMap);
-              await ref
-                  .read(storageProvider)
-                  .saveBackupFileMetadata(backupFileName, metadata);
-            }
+            // Extract full metadata with CRC32 from the newly created backup
+            await _populateMetadataFromNewBackup(
+              targetBackupFilePath,
+              backupFileName,
+            );
           }
 
           if (ref.read(bulkActionsProvider).status ==
@@ -215,9 +318,6 @@ void _backupIsolate(BackupIsolateData data) async {
     final encoder = ZipFileEncoder();
     encoder.create(data.targetBackupFilePath);
 
-    // Track file metadata: filename -> size
-    final Map<String, int> fileMetadata = {};
-
     for (int i = 0; i < data.filePaths.length; i++) {
       final filePath = data.filePaths[i];
       final file = File(filePath);
@@ -236,11 +336,6 @@ void _backupIsolate(BackupIsolateData data) async {
 
         await encoder.addFile(file, relativePath);
 
-        // Record file metadata
-        final stat = await file.stat();
-        final filename = p.basename(filePath);
-        fileMetadata[filename] = stat.size;
-
         data.sendPort.send(
           BackupProgressMessage(i + 1, data.filePaths.length),
         );
@@ -254,7 +349,6 @@ void _backupIsolate(BackupIsolateData data) async {
     data.sendPort.send(BackupCompleteMessage(
       true,
       'Backup has been created at ${data.targetBackupFilePath}',
-      fileMetadata,
     ));
   } catch (e) {
     data.sendPort.send(BackupCompleteMessage(false, e.toString()));
