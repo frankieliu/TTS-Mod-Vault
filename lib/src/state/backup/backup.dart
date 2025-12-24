@@ -237,6 +237,8 @@ class BackupNotifier extends StateNotifier<BackupState> {
   }
 
   Future<void> createBackup(Mod mod, [String? backupDirectory]) async {
+    debugPrint('createBackup - Starting for: ${mod.saveName}');
+
     state = state.copyWith(
       status: backupDirectory != null && backupDirectory.isNotEmpty
           ? BackupStatusEnum.backingUp
@@ -256,9 +258,12 @@ class BackupNotifier extends StateNotifier<BackupState> {
           );
 
     if (backupDirPath == null) {
+      debugPrint('createBackup - No backup directory selected, aborting');
       state = state.copyWith(status: BackupStatusEnum.idle);
       return;
     }
+
+    debugPrint('createBackup - Backup directory: $backupDirPath');
 
     // Determine backup file name and path
     final forceBackupJsonFilename =
@@ -266,10 +271,16 @@ class BackupNotifier extends StateNotifier<BackupState> {
     final backupFileName = getBackupFilenameByMod(mod, forceBackupJsonFilename);
     final targetBackupFilePath = p.join(backupDirPath, backupFileName);
 
+    debugPrint('createBackup - Target file: $backupFileName');
+
     // Check if there's an existing backup to preserve files from
     final existingBackupPath = File(targetBackupFilePath).existsSync()
         ? targetBackupFilePath
         : null;
+
+    if (existingBackupPath != null) {
+      debugPrint('createBackup - Found existing backup at: $existingBackupPath');
+    }
 
     state = state.copyWith(status: BackupStatusEnum.backingUp);
 
@@ -277,6 +288,8 @@ class BackupNotifier extends StateNotifier<BackupState> {
     Directory? tempDir;
 
     try {
+      debugPrint('createBackup - Preparing file paths in isolate...');
+
       final filepathsData = FilepathsIsolateData(
         mod,
         {
@@ -290,7 +303,10 @@ class BackupNotifier extends StateNotifier<BackupState> {
           await Isolate.run(() => _getFilePathsIsolate(filepathsData));
       final totalAssetCount = filePaths.$2;
 
+      debugPrint('createBackup - Found ${filePaths.$1.length} files to backup (${totalAssetCount} assets)');
+
       // Get list of downloaded asset filenames (without extension)
+      debugPrint('createBackup - Building list of downloaded files...');
       final downloadedFilenames = <String>{};
       for (final type in AssetTypeEnum.values) {
         for (final asset in mod.getAssetsByType(type)) {
@@ -299,14 +315,18 @@ class BackupNotifier extends StateNotifier<BackupState> {
           }
         }
       }
+      debugPrint('createBackup - Found ${downloadedFilenames.length} downloaded files');
 
       // Extract files from old backup that aren't in downloaded set
       final additionalFilePaths = <String>[];
       if (existingBackupPath != null) {
+        debugPrint('createBackup - Checking existing backup for files to preserve...');
         try {
           final backupMetadata = ref.read(storageProvider).getBackupFileMetadata(backupFileName);
 
           if (backupMetadata != null && backupMetadata.files.isNotEmpty) {
+            debugPrint('createBackup - Existing backup has ${backupMetadata.files.length} files');
+
             // Find files in backup that aren't downloaded
             final filesToPreserve = <String>[];
             for (final backedUpFilename in backupMetadata.files.keys) {
@@ -316,16 +336,20 @@ class BackupNotifier extends StateNotifier<BackupState> {
             }
 
             if (filesToPreserve.isNotEmpty) {
-              debugPrint('Preserving ${filesToPreserve.length} files from old backup: $filesToPreserve');
+              debugPrint('createBackup - Preserving ${filesToPreserve.length} files from old backup: $filesToPreserve');
 
               // Create temp directory that mirrors the backup structure
+              debugPrint('createBackup - Creating temp directory...');
               tempDir = Directory.systemTemp.createTempSync('tts_backup_preserve_');
 
               // Extract old backup
+              debugPrint('createBackup - Reading existing backup file...');
               final oldBackupBytes = await File(existingBackupPath).readAsBytes();
+              debugPrint('createBackup - Extracting old backup (${oldBackupBytes.length} bytes)...');
               final oldArchive = ZipDecoder().decodeBytes(oldBackupBytes);
 
               // Extract and save files to preserve with original directory structure
+              debugPrint('createBackup - Extracting ${filesToPreserve.length} files from old backup...');
               for (final zipFile in oldArchive.files) {
                 if (!zipFile.isFile) continue;
 
@@ -340,16 +364,20 @@ class BackupNotifier extends StateNotifier<BackupState> {
                   debugPrint('  Extracted with path: ${zipFile.name}');
                 }
               }
+              debugPrint('createBackup - Finished extracting preserved files');
+            } else {
+              debugPrint('createBackup - No files to preserve from old backup');
             }
           }
         } catch (e) {
-          debugPrint('Error extracting old backup files: $e');
+          debugPrint('createBackup - Error extracting old backup files: $e');
           // Continue with backup creation even if extraction fails
         }
       }
 
       // Combine all file paths
       final allFilePaths = [...filePaths.$1, ...additionalFilePaths];
+      debugPrint('createBackup - Total files to zip: ${allFilePaths.length} (${filePaths.$1.length} new + ${additionalFilePaths.length} preserved)');
 
       final receivePort = ReceivePort();
 
@@ -367,7 +395,9 @@ class BackupNotifier extends StateNotifier<BackupState> {
       );
 
       // Start the isolate
+      debugPrint('createBackup - Starting backup isolate...');
       await Isolate.spawn(_backupIsolate, isolateData);
+      debugPrint('createBackup - Backup isolate spawned, waiting for completion...');
 
       // Listen for messages from isolate
       await for (final message in receivePort) {
@@ -380,6 +410,8 @@ class BackupNotifier extends StateNotifier<BackupState> {
           receivePort.close();
 
           if (message.success) {
+            debugPrint('createBackup - Backup isolate completed successfully');
+
             // Add new backup to state
             final newBackup = ExistingBackup(
               filename: backupFileName,
@@ -388,17 +420,22 @@ class BackupNotifier extends StateNotifier<BackupState> {
                   DateTime.now().millisecondsSinceEpoch ~/ 1000,
               totalAssetCount: totalAssetCount,
             );
+            debugPrint('createBackup - Adding backup to state: $backupFileName');
             ref.read(existingBackupsProvider.notifier).addBackup(newBackup);
 
             // Extract full metadata with CRC32 from the newly created backup
+            debugPrint('createBackup - Starting metadata extraction...');
             await _populateMetadataFromNewBackup(
               targetBackupFilePath,
               backupFileName,
             );
+            debugPrint('createBackup - Metadata extraction completed');
 
             // Invalidate backedUpFilesProvider so it recalculates with new metadata
             ref.invalidate(backedUpFilesProvider);
-            debugPrint('Invalidated backedUpFilesProvider after backup creation');
+            debugPrint('createBackup - Invalidated backedUpFilesProvider after backup creation');
+          } else {
+            debugPrint('createBackup - Backup isolate failed: ${message.message}');
           }
 
           if (ref.read(bulkActionsProvider).status ==
@@ -409,20 +446,22 @@ class BackupNotifier extends StateNotifier<BackupState> {
         }
       }
     } catch (e) {
-      debugPrint('createBackup - error: ${e.toString()}');
+      debugPrint('createBackup - Error: ${e.toString()}');
       state = state.copyWith(message: e.toString());
     } finally {
       // Clean up temp directory
       if (tempDir != null && tempDir.existsSync()) {
         try {
+          debugPrint('createBackup - Cleaning up temp directory...');
           tempDir.deleteSync(recursive: true);
-          debugPrint('Cleaned up temp directory');
+          debugPrint('createBackup - Temp directory cleaned up');
         } catch (e) {
-          debugPrint('Error cleaning up temp directory: $e');
+          debugPrint('createBackup - Error cleaning up temp directory: $e');
         }
       }
 
       state = state.copyWith(status: BackupStatusEnum.idle);
+      debugPrint('createBackup - Finished for: ${mod.saveName}');
     }
   }
 }
