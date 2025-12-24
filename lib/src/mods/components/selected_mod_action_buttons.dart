@@ -104,9 +104,9 @@ class SelectedModActionButtons extends HookConsumerWidget {
               return;
             }
 
-            // Interactive mode - show confirmation dialog
+            // Interactive mode - only show dialog for file changes
             if (decision.reason.contains('Files changed')) {
-              // Files have changed - auto-force backup
+              // Files have changed - inform user and create backup
               String message = showWarningMessage
                   ? '$setBackupFolderMessage\n\n${decision.reason}\n\nCreating new backup with updated files.'
                   : '${decision.reason}\n\nCreating new backup with updated files.';
@@ -125,34 +125,9 @@ class SelectedModActionButtons extends HookConsumerWidget {
                 () {},
               );
             } else {
-              // Backup exists, no changes - ask user
-              String message = showWarningMessage
-                  ? '$setBackupFolderMessage\n\nBackup already exists. Replace existing file?'
-                  : 'Backup already exists. Replace existing file?';
-
-              showConfirmDialog(
-                context,
-                message,
-                () async {
-                  final backupConfig = BackupConfig(
-                    behavior: BackupBehavior.replace,
-                    targetFolder: decision.targetFolder,
-                    force: true,
-                  );
-                  await service.backupMod(freshMod, backupConfig, updateUI: true);
-                },
-                () async {
-                  // Just update metadata without creating new backup
-                  try {
-                    await ref
-                        .read(backupProvider.notifier)
-                        .updateExistingBackupMetadata(freshMod);
-                    await ref.read(modsProvider.notifier).updateSelectedMod(freshMod);
-                  } catch (e) {
-                    debugPrint('Error updating backup metadata: $e');
-                  }
-                },
-              );
+              // Backup exists, no changes, Force not checked
+              // Don't show dialog - user should use Force checkbox if they want to replace
+              debugPrint('Backup exists and up to date. Use Force checkbox to replace.');
             }
           },
           child: const Text('Backup'),
