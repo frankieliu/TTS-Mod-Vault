@@ -138,9 +138,12 @@ class _BulkActionsDropDownButton extends HookConsumerWidget {
                 title: 'Backup $actionLabel',
                 initialBehavior: BulkBackupBehaviorEnum.replaceIfOutOfDate,
                 onConfirm: (behavior, folder) {
-                  ref
-                      .read(bulkActionsProvider.notifier)
-                      .backupAllMods(targetMods, behavior, folder);
+                  // Delay execution to allow dialog to close and UI to update
+                  Future.microtask(() {
+                    ref
+                        .read(bulkActionsProvider.notifier)
+                        .backupAllMods(targetMods, behavior, folder);
+                  });
                 },
               ),
             );
@@ -192,9 +195,12 @@ class _BulkActionsDropDownButton extends HookConsumerWidget {
                 title: 'Download & backup $actionLabel',
                 initialBehavior: BulkBackupBehaviorEnum.replaceIfOutOfDate,
                 onConfirm: (behavior, folder) {
-                  ref
-                      .read(bulkActionsProvider.notifier)
-                      .downloadAndBackupAllMods(targetMods, behavior, folder);
+                  // Delay execution to allow dialog to close and UI to update
+                  Future.microtask(() {
+                    ref
+                        .read(bulkActionsProvider.notifier)
+                        .downloadAndBackupAllMods(targetMods, behavior, folder);
+                  });
                 },
               ),
             );
