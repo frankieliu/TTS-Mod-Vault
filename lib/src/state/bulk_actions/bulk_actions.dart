@@ -357,24 +357,15 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
     );
   }
 
-  // Helper method to refresh backup info for mods after bulk operations
+  // Helper method to refresh backup and asset info for mods after bulk operations
   Future<void> _refreshBackupInfo(List<Mod> mods) async {
     if (mods.isEmpty) return;
 
-    debugPrint('Refreshing backup info for ${mods.length} mods');
+    debugPrint('Refreshing backup and asset info for ${mods.length} mods');
 
-    // Update each mod with its current backup from existingBackupsProvider
-    for (final mod in mods) {
-      final backup =
-          ref.read(existingBackupsProvider.notifier).getBackupByMod(mod);
+    // Call the efficient refresh method in ModsNotifier
+    await ref.read(modsProvider.notifier).refreshModsInfo(mods);
 
-      // Create updated mod with new backup reference
-      final updatedMod = mod.copyWith(backup: backup);
-
-      // Update in state
-      ref.read(modsProvider.notifier).updateMod(updatedMod);
-    }
-
-    debugPrint('Backup info refresh complete');
+    debugPrint('Backup and asset info refresh complete');
   }
 }

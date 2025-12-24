@@ -911,4 +911,31 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
       setSelectedMod(completeMod);
     }
   }
+
+  // Efficiently refresh backup and asset info for mods without expensive CRC32 checks
+  Future<void> refreshModsInfo(List<Mod> mods) async {
+    if (mods.isEmpty || !state.hasValue) return;
+
+    for (final mod in mods) {
+      // Get updated backup reference
+      final backup =
+          ref.read(existingBackupsProvider.notifier).getBackupByMod(mod);
+
+      // Recalculate asset existence (files may have been downloaded)
+      final urls = getUrlsByMod(mod, false);
+      final assetLists = _getAssetListsFromUrls(urls);
+
+      // Update mod with new backup and asset info (skip backup status calculation)
+      final updatedMod = mod.copyWith(
+        backup: backup,
+        assetLists: assetLists.$1,
+        assetCount: assetLists.$2,
+        existingAssetCount: assetLists.$3,
+        missingAssetCount: assetLists.$2 - assetLists.$3,
+        failedAssetCount: assetLists.$4,
+      );
+
+      updateMod(updatedMod);
+    }
+  }
 }

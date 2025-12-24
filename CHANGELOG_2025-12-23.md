@@ -576,3 +576,25 @@ After bulk operations complete, the UI now properly shows:
 - Called after `downloadAllMods()` completes (line 74)
 - Called after `backupAllMods()` completes (line 153)
 - Called after `downloadAndBackupAllMods()` completes (line 236)
+
+### Update - Asset Count Refresh
+
+**Problem**: The initial `_refreshBackupInfo()` only updated backup references, not asset counts, so:
+- Asset URLs didn't show blue borders after downloads
+- File counts remained stale (showing old missing counts)
+
+**Solution**: Added `refreshModsInfo()` method in ModsNotifier that efficiently updates:
+- ✅ Backup references (for green folder icons)
+- ✅ Asset existence (checking which files now exist after download)
+- ✅ Asset counts (existingAssetCount, missingAssetCount, failedAssetCount)
+- ❌ Skips expensive backup status / CRC32 checks
+
+**Files Modified**:
+- **mods.dart** (lines 915-941) - Added `refreshModsInfo()` method
+- **bulk_actions.dart** (line 367) - Updated to call `refreshModsInfo()`
+
+**Result**: After bulk operations, the UI now shows:
+- ✅ Blue borders on AssetURL when all files exist
+- ✅ Updated file counts  
+- ✅ Green folder icons for backups
+- ✅ No expensive CRC32 checks
