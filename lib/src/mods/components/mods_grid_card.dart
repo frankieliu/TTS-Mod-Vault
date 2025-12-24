@@ -10,8 +10,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart'
     show HookConsumerWidget, WidgetRef;
 import 'package:tts_mod_vault/src/mods/components/components.dart'
     show CustomTooltip;
-import 'package:tts_mod_vault/src/state/backup/backup_status_enum.dart'
-    show ExistingBackupStatusEnum;
 import 'package:tts_mod_vault/src/state/mods/mod_model.dart'
     show Mod, ModTypeEnum;
 import 'package:tts_mod_vault/src/state/provider.dart'
@@ -61,13 +59,22 @@ class ModsGridCard extends HookConsumerWidget {
       return '$missingCount missing $fileLabel';
     }, [mod.existingAssetCount]);
 
-    final backupHasSameAssetCount = useMemoized(() {
-      if (mod.backup != null &&
-          mod.backup?.totalAssetCount != null &&
-          mod.existingAssetCount != null) {
-        return mod.backup!.totalAssetCount == mod.existingAssetCount!;
+    final backupIconColor = useMemoized(() {
+      if (mod.backup == null) {
+        return null; // No backup - no icon
       }
-      return true;
+
+      if (mod.backup!.totalAssetCount == null ||
+          mod.existingAssetCount == null) {
+        return Colors.grey; // Unknown state
+      }
+
+      // Fast comparison: backup file count vs downloaded file count
+      if (mod.backup!.totalAssetCount! >= mod.existingAssetCount!) {
+        return Colors.green; // Backup has all files (or more from old versions)
+      } else {
+        return Colors.yellow; // Backup is missing some downloaded files
+      }
     }, [mod.backup, mod.existingAssetCount]);
 
     return MouseRegion(
@@ -238,22 +245,17 @@ class ModsGridCard extends HookConsumerWidget {
                                   ),
                                 ),
                               ),
-                              if (mod.backup != null && showBackupState)
+                              if (backupIconColor != null && showBackupState)
                                 CustomTooltip(
                                   waitDuration: Duration(milliseconds: 300),
                                   message:
                                       'Update: ${formatTimestamp(mod.dateTimeStamp) ?? 'N/A'}\n'
                                       'Backup: ${formatTimestamp(mod.backup!.lastModifiedTimestamp.toString())}'
-                                      '${backupHasSameAssetCount || mod.backup!.totalAssetCount == null ? '' : '\n\nBackup asset files count: ${mod.backup!.totalAssetCount}\nExisting asset files count: ${mod.existingAssetCount}'}',
+                                      '${mod.backup!.totalAssetCount == null ? '' : '\n\nBackup asset files count: ${mod.backup!.totalAssetCount}\nExisting asset files count: ${mod.existingAssetCount}'}',
                                   child: Icon(
                                     Icons.folder_zip_outlined,
                                     size: 20,
-                                    color: mod.backupStatus ==
-                                            ExistingBackupStatusEnum.upToDate
-                                        ? backupHasSameAssetCount
-                                            ? Colors.green
-                                            : Colors.yellow
-                                        : Colors.red,
+                                    color: backupIconColor,
                                   ),
                                 ),
                             ],

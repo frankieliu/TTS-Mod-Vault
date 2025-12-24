@@ -66,13 +66,10 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
           statusMessage:
               'Downloading all ${ref.read(selectedModTypeProvider).label}s (${mods.indexOf(mod) + 1}/${state.totalModNumber})');
 
-      final modUrls = await ref.read(modsProvider.notifier).getUrlsByMod(mod);
-      final completeMod =
-          await ref.read(modsProvider.notifier).getCompleteMod(mod, modUrls);
-
-      ref.read(modsProvider.notifier).setSelectedMod(completeMod);
-      await ref.read(downloadProvider.notifier).downloadAllFiles(completeMod);
-      await ref.read(modsProvider.notifier).updateSelectedMod(completeMod);
+      ref.read(modsProvider.notifier).setSelectedMod(mod);
+      await ref.read(downloadProvider.notifier).downloadAllFiles(mod);
+      // Skip updateSelectedMod during bulk operations - state will refresh naturally
+      // This avoids expensive backup status recalculation that's not needed during downloads
     }
 
     _resetState();
@@ -150,7 +147,7 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       await ref
           .read(backupProvider.notifier)
           .createBackup(completeMod, modBackupFolder);
-      await ref.read(modsProvider.notifier).updateSelectedMod(completeMod);
+      // Skip updateSelectedMod after backup - state will refresh naturally
     }
 
     _resetState();
@@ -187,27 +184,17 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
           statusMessage:
               'Downloading & backing up all ${ref.read(selectedModTypeProvider).label}s (${mods.indexOf(mod) + 1}/${state.totalModNumber})');
 
-      final modUrls = await ref.read(modsProvider.notifier).getUrlsByMod(mod);
-      final completeMod =
-          await ref.read(modsProvider.notifier).getCompleteMod(mod, modUrls);
-      ref.read(modsProvider.notifier).setSelectedMod(completeMod);
-
-      await ref.read(downloadProvider.notifier).downloadAllFiles(completeMod);
-      await ref.read(modsProvider.notifier).updateSelectedMod(completeMod);
+      // Download files first
+      ref.read(modsProvider.notifier).setSelectedMod(mod);
+      await ref.read(downloadProvider.notifier).downloadAllFiles(mod);
 
       if (state.cancelledBulkAction) {
         continue;
       }
 
-      // Get updated mod after download (backup status needs to be re-checked with downloaded files)
-      final selectedMod = ref.read(selectedModProvider);
-      if (selectedMod == null) {
-        continue;
-      }
-
-      // Re-calculate backup status after download with CRC32/file checks
-      final updatedModUrls = await ref.read(modsProvider.notifier).getUrlsByMod(selectedMod);
-      final updatedMod = await ref.read(modsProvider.notifier).getCompleteMod(selectedMod, updatedModUrls);
+      // After download, get updated mod with fresh CRC32 data to check if backup is needed
+      final modUrls = await ref.read(modsProvider.notifier).getUrlsByMod(mod);
+      final updatedMod = await ref.read(modsProvider.notifier).getCompleteMod(mod, modUrls);
 
       String modBackupFolder = selectedBackupFolder;
 
@@ -241,7 +228,7 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       await ref
           .read(backupProvider.notifier)
           .createBackup(updatedMod, modBackupFolder);
-      await ref.read(modsProvider.notifier).updateSelectedMod(updatedMod);
+      // Skip updateSelectedMod after backup - state will refresh naturally
     }
 
     _resetState();
