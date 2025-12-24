@@ -173,18 +173,26 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
   }
 
   void addBackup(ExistingBackup newBackup) {
+    debugPrint('addBackup - Adding backup: ${newBackup.filename}');
+    debugPrint('addBackup - Filepath: ${newBackup.filepath}');
+    debugPrint('addBackup - Current backups in state: ${state.backups.length}');
+
     final existingIndex = state.backups
         .indexWhere((backup) => backup.filename == newBackup.filename);
 
     if (existingIndex >= 0) {
       // Replace existing backup
+      debugPrint('addBackup - Replacing existing backup at index $existingIndex');
       final updatedBackups = [...state.backups];
       updatedBackups[existingIndex] = newBackup;
       state = ExistingBackupsState(backups: updatedBackups);
     } else {
       // Add new backup
+      debugPrint('addBackup - Adding new backup');
       state = ExistingBackupsState(backups: [...state.backups, newBackup]);
     }
+
+    debugPrint('addBackup - Total backups after add: ${state.backups.length}');
   }
 
   ExistingBackup? _getMostRecentBackupByFilename(String filename) {
@@ -207,27 +215,50 @@ class ExistingBackupsStateNotifier extends StateNotifier<ExistingBackupsState> {
       final forceBackupJsonFilename =
           ref.read(settingsProvider).forceBackupJsonFilename;
 
+      debugPrint('getBackupByMod - Looking for backup for: ${mod.saveName}');
+      debugPrint('getBackupByMod - forceBackupJsonFilename: $forceBackupJsonFilename');
+      debugPrint('getBackupByMod - Total backups in state: ${state.backups.length}');
+
       if (forceBackupJsonFilename && mod.modType == ModTypeEnum.mod) {
         // Try to find backup name which includes JSON filename
         final backupFileNameWithJson = getBackupFilenameByMod(mod, true);
+        debugPrint('getBackupByMod - Trying with JSON: $backupFileNameWithJson');
         final backupFileWithJson =
             _getMostRecentBackupByFilename(backupFileNameWithJson);
 
         if (backupFileWithJson != null) {
+          debugPrint('getBackupByMod - Found backup with JSON: ${backupFileWithJson.filepath}');
           return backupFileWithJson;
         }
 
         // Try to find backup name which doesn't force inclusion of JSON filename
         final standardBackupFileName = getBackupFilenameByMod(mod, false);
+        debugPrint('getBackupByMod - Trying standard: $standardBackupFileName');
         final standardBackup =
             _getMostRecentBackupByFilename(standardBackupFileName);
+
+        if (standardBackup != null) {
+          debugPrint('getBackupByMod - Found standard backup: ${standardBackup.filepath}');
+        } else {
+          debugPrint('getBackupByMod - No backup found');
+        }
 
         return standardBackup;
       }
 
       final backupFileName = getBackupFilenameByMod(mod, false);
-      return _getMostRecentBackupByFilename(backupFileName);
+      debugPrint('getBackupByMod - Trying backup name: $backupFileName');
+      final result = _getMostRecentBackupByFilename(backupFileName);
+
+      if (result != null) {
+        debugPrint('getBackupByMod - Found backup: ${result.filepath}');
+      } else {
+        debugPrint('getBackupByMod - No backup found');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('getBackupByMod - Error: $e');
       return null;
     }
   }

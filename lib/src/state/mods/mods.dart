@@ -682,8 +682,10 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
   }
 
   Future<Mod> getCompleteMod(Mod mod, Map<String, String> jsonURLs) async {
+    debugPrint('getCompleteMod - Getting backup for: ${mod.saveName}');
     ExistingBackup? backup =
         ref.read(existingBackupsProvider.notifier).getBackupByMod(mod);
+    debugPrint('getCompleteMod - Backup found: ${backup?.filepath ?? "null"}');
 
     if (backup != null && backup.totalAssetCount == null) {
       final backupTotalAssetCount = await ref

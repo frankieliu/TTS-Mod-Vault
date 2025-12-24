@@ -54,8 +54,9 @@ class ModOperationsService {
   /// Returns the BackupDecision if interactive confirmation is needed
   Future<BackupDecision?> backupMod(
     Mod mod,
-    BackupConfig config,
-  ) async {
+    BackupConfig config, {
+    bool updateUI = true,
+  }) async {
     final decision = await _determineBackupAction(mod, config);
 
     debugPrint('Backup decision for ${mod.saveName}: ${decision.reason}');
@@ -76,7 +77,10 @@ class ModOperationsService {
           decision.targetFolder,
         );
 
-    await _refreshModUI(mod);
+    if (updateUI) {
+      await _refreshModUI(mod);
+    }
+
     return decision;
   }
 
