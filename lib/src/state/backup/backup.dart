@@ -487,12 +487,21 @@ class BackupNotifier extends StateNotifier<BackupState> {
     final files = directory.listSync();
     debugPrint('_getFilePathsIsolate - Found ${files.length} files in directory for $type');
 
+    // Build a lookup map for O(1) access instead of O(n) search
+    debugPrint('_getFilePathsIsolate - Building filename lookup map...');
+    final fileMap = <String, String>{};
+    for (final file in files) {
+      final basename = p.basenameWithoutExtension(file.path);
+      fileMap[basename] = file.path;
+    }
+    debugPrint('_getFilePathsIsolate - Lookup map built with ${fileMap.length} entries');
+
     final assets = data.mod.getAssetsByType(type);
     debugPrint('_getFilePathsIsolate - Mod has ${assets.length} assets of type $type');
 
     int matchCount = 0;
-    assets.forEach((asset) {
-      if (asset.filePath == null) return;
+    for (final asset in assets) {
+      if (asset.filePath == null) continue;
 
       final newUrlBase = p.basenameWithoutExtension(asset.filePath!);
       final oldUrlBase = newUrlBase.replaceFirst(
@@ -500,16 +509,24 @@ class BackupNotifier extends StateNotifier<BackupState> {
         getFileNameFromURL(oldCloudUrl),
       );
 
-      final match = files.firstWhereOrNull((file) {
-        final base = p.basenameWithoutExtension(file.path);
-        return base.startsWith(newUrlBase) || base.startsWith(oldUrlBase);
-      });
+      // Try exact match first (O(1) lookup)
+      String? matchPath = fileMap[newUrlBase] ?? fileMap[oldUrlBase];
 
-      if (match != null && match.path.isNotEmpty) {
-        filePaths.add(p.normalize(match.path));
+      // If no exact match, try prefix match (only when needed)
+      if (matchPath == null) {
+        for (final basename in fileMap.keys) {
+          if (basename.startsWith(newUrlBase) || basename.startsWith(oldUrlBase)) {
+            matchPath = fileMap[basename];
+            break;
+          }
+        }
+      }
+
+      if (matchPath != null && matchPath.isNotEmpty) {
+        filePaths.add(p.normalize(matchPath));
         matchCount++;
       }
-    });
+    }
 
     debugPrint('_getFilePathsIsolate - Matched $matchCount files for type $type');
   }
