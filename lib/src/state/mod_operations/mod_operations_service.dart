@@ -51,7 +51,7 @@ class ModOperationsService {
   // ============ Backup Operations ============
 
   /// Backup a single mod using the provided configuration
-  /// Returns the BackupDecision if interactive confirmation is needed
+  /// Returns the BackupDecision if interactive confirmation is needed, null if completed
   Future<BackupDecision?> backupMod(
     Mod mod,
     BackupConfig config, {
@@ -81,7 +81,8 @@ class ModOperationsService {
       await _refreshModUI(mod);
     }
 
-    return decision;
+    // Return null to indicate backup completed successfully
+    return null;
   }
 
   /// Backup multiple mods with progress callback

@@ -82,12 +82,6 @@ class SelectedModActionButtons extends HookConsumerWidget {
 
             debugPrint('service.backupMod() returned, decision: ${decision?.reason ?? "null (backup completed)"}');
 
-            // Check if widget is still mounted before showing dialogs
-            if (!context.mounted) {
-              debugPrint('Widget not mounted, returning early');
-              return;
-            }
-
             if (decision == null) {
               // Backup completed - update UI from widget context
               debugPrint('Backup completed, calling updateSelectedMod()...');
@@ -114,6 +108,12 @@ class SelectedModActionButtons extends HookConsumerWidget {
               } catch (e) {
                 debugPrint('ERROR in updateSelectedMod(): $e');
               }
+              return;
+            }
+
+            // Check if widget is still mounted before showing dialogs
+            if (!context.mounted) {
+              debugPrint('Widget not mounted, cannot show dialog');
               return;
             }
 
