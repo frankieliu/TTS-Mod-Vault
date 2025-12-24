@@ -467,17 +467,31 @@ class BackupNotifier extends StateNotifier<BackupState> {
 }
 
 (List<String>, int) _getFilePathsIsolate(FilepathsIsolateData data) {
+  debugPrint('_getFilePathsIsolate - Starting for mod: ${data.mod.saveName}');
   final filePaths = <String>[];
 
   for (final type in AssetTypeEnum.values) {
     final dirPath = data.directories[type];
-    if (dirPath == null) continue;
+    if (dirPath == null) {
+      debugPrint('_getFilePathsIsolate - No directory for type: $type');
+      continue;
+    }
 
     final directory = Directory(dirPath);
-    if (!directory.existsSync()) continue;
+    if (!directory.existsSync()) {
+      debugPrint('_getFilePathsIsolate - Directory does not exist: $dirPath');
+      continue;
+    }
 
+    debugPrint('_getFilePathsIsolate - Scanning directory for $type: $dirPath');
     final files = directory.listSync();
-    data.mod.getAssetsByType(type).forEach((asset) {
+    debugPrint('_getFilePathsIsolate - Found ${files.length} files in directory for $type');
+
+    final assets = data.mod.getAssetsByType(type);
+    debugPrint('_getFilePathsIsolate - Mod has ${assets.length} assets of type $type');
+
+    int matchCount = 0;
+    assets.forEach((asset) {
       if (asset.filePath == null) return;
 
       final newUrlBase = p.basenameWithoutExtension(asset.filePath!);
@@ -493,17 +507,23 @@ class BackupNotifier extends StateNotifier<BackupState> {
 
       if (match != null && match.path.isNotEmpty) {
         filePaths.add(p.normalize(match.path));
+        matchCount++;
       }
     });
+
+    debugPrint('_getFilePathsIsolate - Matched $matchCount files for type $type');
   }
 
   final assetFilesCount = filePaths.length;
+  debugPrint('_getFilePathsIsolate - Total asset files found: $assetFilesCount');
 
   // Add JSON and image filepaths
   filePaths.add(data.mod.jsonFilePath);
   if (data.mod.imageFilePath != null && data.mod.imageFilePath!.isNotEmpty) {
     filePaths.add(data.mod.imageFilePath!);
   }
+
+  debugPrint('_getFilePathsIsolate - Total files to backup: ${filePaths.length} (${assetFilesCount} assets + JSON/image)');
 
   return (filePaths, assetFilesCount);
 }
