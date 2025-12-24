@@ -14,6 +14,7 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         backupProvider,
         directoriesProvider,
         modsProvider,
+        selectedModProvider,
         settingsProvider;
 import 'package:tts_mod_vault/src/utils.dart' show showConfirmDialog;
 
