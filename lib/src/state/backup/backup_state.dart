@@ -64,6 +64,7 @@ class BackupIsolateData {
   final String savesParentPath;
   final String savesPath;
   final SendPort sendPort;
+  final String? tempDirPath; // For files extracted from old backup
 
   BackupIsolateData({
     required this.filePaths,
@@ -72,6 +73,7 @@ class BackupIsolateData {
     required this.savesParentPath,
     required this.savesPath,
     required this.sendPort,
+    this.tempDirPath,
   });
 }
 

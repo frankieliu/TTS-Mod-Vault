@@ -90,7 +90,31 @@ class SelectedModActionButtons extends HookConsumerWidget {
               return;
             }
 
-            // Backup exists and force not checked → Ask what to do
+            // Backup exists and force not checked → Check if backup should be forced
+            final shouldForce = backupNotifier.shouldForceBackup(selectedMod);
+
+            if (shouldForce) {
+              // Downloaded files have changed → Auto-force backup creation
+              String forceMessage =
+                  'Downloaded files have changed (new files or CRC32 mismatch).\n\nCreating new backup with updated files.';
+              String message = showWarningMessage
+                  ? '$setBackupFolderMessage\n\n$forceMessage'
+                  : forceMessage;
+
+              showConfirmDialog(
+                context,
+                message,
+                () async {
+                  final backupFolder = p.dirname(selectedMod.backup!.filepath);
+                  await backupNotifier.createBackup(selectedMod, backupFolder);
+                  await modsNotifier.updateSelectedMod(selectedMod);
+                },
+                () {},
+              );
+              return;
+            }
+
+            // Backup exists, no changes detected → Ask what to do
             String backupMessage =
                 'Backup already exists. Replace existing file?';
             String message = showWarningMessage

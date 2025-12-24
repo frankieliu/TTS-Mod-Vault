@@ -49,6 +49,77 @@ class BackupNotifier extends StateNotifier<BackupState> {
     state = state.copyWith(message: "");
   }
 
+  /// Checks if a backup should be forced based on downloaded file changes
+  /// Returns true if:
+  /// 1. There are downloaded files not present in the backup
+  /// 2. Downloaded files have different CRC32 than backup (when both are non-zero)
+  bool shouldForceBackup(Mod mod) {
+    try {
+      // Get backup metadata
+      final forceBackupJsonFilename =
+          ref.read(settingsProvider).forceBackupJsonFilename;
+      final backupFileName = getBackupFilenameByMod(mod, forceBackupJsonFilename);
+      final storage = ref.read(storageProvider);
+      final backupMetadata = storage.getBackupFileMetadata(backupFileName);
+
+      if (backupMetadata == null || backupMetadata.files.isEmpty) {
+        debugPrint('shouldForceBackup: No backup metadata found');
+        return false; // No metadata, can't determine
+      }
+
+      // Get all downloaded files metadata
+      final downloadedMetadata = storage.getAllDownloadedFileInfo();
+
+      // Get all URLs for this mod
+      final assetLists = mod.assetLists;
+      if (assetLists == null) {
+        return false;
+      }
+
+      final allAssets = mod.getAllAssets();
+      int newFilesCount = 0;
+      int modifiedFilesCount = 0;
+
+      for (final asset in allAssets) {
+        if (!asset.fileExists) continue; // Skip non-downloaded files
+
+        final filename = getFileNameFromURL(asset.url);
+        final downloadInfo = downloadedMetadata[filename];
+        final backupInfo = backupMetadata.files[filename];
+
+        // Case 1: Downloaded file not in backup
+        if (backupInfo == null) {
+          newFilesCount++;
+          debugPrint('  New file not in backup: $filename');
+          continue;
+        }
+
+        // Case 2: CRC32 mismatch (when both are non-zero)
+        if (downloadInfo != null &&
+            downloadInfo.crc32 != 0 &&
+            backupInfo.crc32 != 0 &&
+            downloadInfo.crc32 != backupInfo.crc32) {
+          modifiedFilesCount++;
+          debugPrint(
+              '  CRC32 mismatch for $filename: downloaded=${downloadInfo.crc32}, backup=${backupInfo.crc32}');
+        }
+      }
+
+      final shouldForce = newFilesCount > 0 || modifiedFilesCount > 0;
+      if (shouldForce) {
+        debugPrint(
+            'shouldForceBackup: YES - $newFilesCount new files, $modifiedFilesCount modified files');
+      } else {
+        debugPrint('shouldForceBackup: NO - backup is up to date');
+      }
+
+      return shouldForce;
+    } catch (e) {
+      debugPrint('shouldForceBackup error: $e');
+      return false;
+    }
+  }
+
   /// Update metadata from an existing backup file without creating a new backup
   /// This extracts size, CRC32, and timestamp from the ZIP metadata (fast operation)
   Future<void> updateExistingBackupMetadata(Mod mod) async {
@@ -195,7 +266,15 @@ class BackupNotifier extends StateNotifier<BackupState> {
     final backupFileName = getBackupFilenameByMod(mod, forceBackupJsonFilename);
     final targetBackupFilePath = p.join(backupDirPath, backupFileName);
 
+    // Check if there's an existing backup to preserve files from
+    final existingBackupPath = File(targetBackupFilePath).existsSync()
+        ? targetBackupFilePath
+        : null;
+
     state = state.copyWith(status: BackupStatusEnum.backingUp);
+
+    // Temporary directory for extracted files from old backup
+    Directory? tempDir;
 
     try {
       final filepathsData = FilepathsIsolateData(
@@ -211,18 +290,80 @@ class BackupNotifier extends StateNotifier<BackupState> {
           await Isolate.run(() => _getFilePathsIsolate(filepathsData));
       final totalAssetCount = filePaths.$2;
 
+      // Get list of downloaded asset filenames (without extension)
+      final downloadedFilenames = <String>{};
+      for (final type in AssetTypeEnum.values) {
+        for (final asset in mod.getAssetsByType(type)) {
+          if (asset.fileExists) {
+            downloadedFilenames.add(getFileNameFromURL(asset.url));
+          }
+        }
+      }
+
+      // Extract files from old backup that aren't in downloaded set
+      final additionalFilePaths = <String>[];
+      if (existingBackupPath != null) {
+        try {
+          final backupMetadata = ref.read(storageProvider).getBackupFileMetadata(backupFileName);
+
+          if (backupMetadata != null && backupMetadata.files.isNotEmpty) {
+            // Find files in backup that aren't downloaded
+            final filesToPreserve = <String>[];
+            for (final backedUpFilename in backupMetadata.files.keys) {
+              if (!downloadedFilenames.contains(backedUpFilename)) {
+                filesToPreserve.add(backedUpFilename);
+              }
+            }
+
+            if (filesToPreserve.isNotEmpty) {
+              debugPrint('Preserving ${filesToPreserve.length} files from old backup: $filesToPreserve');
+
+              // Create temp directory that mirrors the backup structure
+              tempDir = Directory.systemTemp.createTempSync('tts_backup_preserve_');
+
+              // Extract old backup
+              final oldBackupBytes = await File(existingBackupPath).readAsBytes();
+              final oldArchive = ZipDecoder().decodeBytes(oldBackupBytes);
+
+              // Extract and save files to preserve with original directory structure
+              for (final zipFile in oldArchive.files) {
+                if (!zipFile.isFile) continue;
+
+                final filenameWithoutExt = p.basenameWithoutExtension(zipFile.name);
+                if (filesToPreserve.contains(filenameWithoutExt)) {
+                  // Preserve the full relative path from the ZIP
+                  final tempFilePath = p.join(tempDir.path, zipFile.name);
+                  final file = File(tempFilePath);
+                  await file.create(recursive: true);
+                  await file.writeAsBytes(zipFile.content as List<int>);
+                  additionalFilePaths.add(tempFilePath);
+                  debugPrint('  Extracted with path: ${zipFile.name}');
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Error extracting old backup files: $e');
+          // Continue with backup creation even if extraction fails
+        }
+      }
+
+      // Combine all file paths
+      final allFilePaths = [...filePaths.$1, ...additionalFilePaths];
+
       final receivePort = ReceivePort();
 
       final modsDir = Directory(ref.read(directoriesProvider).modsDir);
       final savesDir = Directory(ref.read(directoriesProvider).savesDir);
 
       final isolateData = BackupIsolateData(
-        filePaths: filePaths.$1,
+        filePaths: allFilePaths,
         targetBackupFilePath: targetBackupFilePath,
         modsParentPath: modsDir.parent.path,
         savesParentPath: savesDir.parent.path,
         savesPath: savesDir.path,
         sendPort: receivePort.sendPort,
+        tempDirPath: tempDir?.path, // Pass temp directory path
       );
 
       // Start the isolate
@@ -271,6 +412,16 @@ class BackupNotifier extends StateNotifier<BackupState> {
       debugPrint('createBackup - error: ${e.toString()}');
       state = state.copyWith(message: e.toString());
     } finally {
+      // Clean up temp directory
+      if (tempDir != null && tempDir.existsSync()) {
+        try {
+          tempDir.deleteSync(recursive: true);
+          debugPrint('Cleaned up temp directory');
+        } catch (e) {
+          debugPrint('Error cleaning up temp directory: $e');
+        }
+      }
+
       state = state.copyWith(status: BackupStatusEnum.idle);
     }
   }
@@ -332,12 +483,22 @@ void _backupIsolate(BackupIsolateData data) async {
       }
 
       try {
-        final isInSavesPath = filePath.startsWith(p.normalize(data.savesPath));
+        // Check if file is from preserved temp directory
+        final isFromTempDir = data.tempDirPath != null &&
+            filePath.startsWith(p.normalize(data.tempDirPath!));
 
-        final relativePath = p.relative(
-          filePath,
-          from: isInSavesPath ? data.savesParentPath : data.modsParentPath,
-        );
+        final String relativePath;
+        if (isFromTempDir) {
+          // For temp files, use temp directory as base to preserve original structure
+          relativePath = p.relative(filePath, from: data.tempDirPath!);
+        } else {
+          // For normal files, use saves or mods parent path
+          final isInSavesPath = filePath.startsWith(p.normalize(data.savesPath));
+          relativePath = p.relative(
+            filePath,
+            from: isInSavesPath ? data.savesParentPath : data.modsParentPath,
+          );
+        }
 
         await encoder.addFile(file, relativePath);
 
