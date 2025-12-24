@@ -922,7 +922,7 @@ class ModsStateNotifier extends AsyncNotifier<ModsState> {
           ref.read(existingBackupsProvider.notifier).getBackupByMod(mod);
 
       // Recalculate asset existence (files may have been downloaded)
-      final urls = getUrlsByMod(mod, false);
+      final urls = await getUrlsByMod(mod, false);
       final assetLists = _getAssetListsFromUrls(urls);
 
       // Update mod with new backup and asset info (skip backup status calculation)
