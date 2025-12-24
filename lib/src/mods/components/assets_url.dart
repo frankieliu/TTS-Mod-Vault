@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart' show useMemoized;
 import 'package:hooks_riverpod/hooks_riverpod.dart'
-    show HookConsumerWidget, WidgetRef;
+    show ConsumerWidget, WidgetRef;
+import 'package:tts_mod_vault/src/mods/components/asset_detail_dialog.dart'
+    show AssetDetailDialog;
 import 'package:tts_mod_vault/src/mods/components/replace_url_dialog.dart'
     show showReplaceUrlDialog;
 import 'package:tts_mod_vault/src/mods/enums/context_menu_action_enum.dart'
@@ -18,7 +19,6 @@ import 'package:tts_mod_vault/src/state/provider.dart'
         failedAssetsProvider,
         modsProvider,
         selectedModProvider,
-        selectedUrlProvider,
         settingsProvider;
 import 'package:tts_mod_vault/src/utils.dart'
     show
@@ -30,7 +30,7 @@ import 'package:tts_mod_vault/src/utils.dart'
         openUrl,
         showSnackBar;
 
-class AssetsUrl extends HookConsumerWidget {
+class AssetsUrl extends ConsumerWidget {
   final Asset asset;
   final AssetTypeEnum type;
 
@@ -42,11 +42,6 @@ class AssetsUrl extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedUrl = ref.watch(selectedUrlProvider);
-    final isSelected = useMemoized(
-      () => asset.url == selectedUrl,
-      [selectedUrl],
-    );
 
     void showURLContextMenu(BuildContext context, Offset position) {
       showMenu(
@@ -217,20 +212,18 @@ class AssetsUrl extends HookConsumerWidget {
     void onTapDown(TapDownDetails details) {
       if (ref.read(actionInProgressProvider)) return;
 
-      if (!isSelected) {
-        showURLContextMenu(context, details.globalPosition);
-      }
-
-      ref.read(selectedUrlProvider.notifier).state =
-          isSelected ? '' : asset.url;
+      // Show asset detail dialog on left-click
+      showDialog(
+        context: context,
+        builder: (context) => AssetDetailDialog(asset: asset, type: type),
+      );
     }
 
     void onSecondaryTapDown(TapDownDetails details) {
       if (ref.read(actionInProgressProvider)) return;
 
+      // Show context menu on right-click (unchanged)
       showURLContextMenu(context, details.globalPosition);
-
-      ref.read(selectedUrlProvider.notifier).state = asset.url;
     }
 
     return Container(
@@ -250,42 +243,37 @@ class AssetsUrl extends HookConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Status icon
-              if (!isSelected) ...[
-                Icon(
-                  asset.fileExists
-                      ? Icons.check_circle
-                      : asset.hasFailed
-                          ? (asset.errorType == DownloadErrorTypeEnum.permanent
-                              ? Icons.error
-                              : Icons.warning)
-                          : Icons.circle_outlined,
-                  size: 14,
-                  color: asset.fileExists
-                      ? Colors.green
-                      : asset.hasFailed
-                          ? (asset.errorType == DownloadErrorTypeEnum.permanent
-                              ? Colors.red
-                              : Colors.orange)
-                          : Colors.white,
-                ),
-                const SizedBox(width: 4),
-              ],
+              Icon(
+                asset.fileExists
+                    ? Icons.check_circle
+                    : asset.hasFailed
+                        ? (asset.errorType == DownloadErrorTypeEnum.permanent
+                            ? Icons.error
+                            : Icons.warning)
+                        : Icons.circle_outlined,
+                size: 14,
+                color: asset.fileExists
+                    ? Colors.green
+                    : asset.hasFailed
+                        ? (asset.errorType == DownloadErrorTypeEnum.permanent
+                            ? Colors.red
+                            : Colors.orange)
+                        : Colors.white,
+              ),
+              const SizedBox(width: 4),
               // URL text
               Flexible(
                 child: Text(
                   asset.url,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isSelected
-                        ? Colors.lightBlue
-                        : asset.fileExists
-                            ? Colors.green
-                            : asset.hasFailed
-                                ? (asset.errorType ==
-                                        DownloadErrorTypeEnum.permanent
-                                    ? Colors.red
-                                    : Colors.orange)
-                                : Colors.white,
+                    color: asset.fileExists
+                        ? Colors.green
+                        : asset.hasFailed
+                            ? (asset.errorType == DownloadErrorTypeEnum.permanent
+                                ? Colors.red
+                                : Colors.orange)
+                            : Colors.white,
                   ),
                 ),
               ),
