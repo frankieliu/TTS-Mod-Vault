@@ -493,3 +493,86 @@ Now the system uses different checks for different purposes:
 - ✅ **Better performance** - Especially noticeable with large mod libraries
 
 The backup icon now provides immediate visual feedback while the comprehensive CRC32 check is reserved for when it actually matters - making backup decisions.
+
+---
+
+## 6. Fix - Refresh UI After Bulk Operations
+
+### Problem
+
+After completing bulk backup or download operations, the UI wasn't updating to reflect the changes:
+- ❌ Backup icons (green folder) weren't showing after creating backups
+- ❌ File count comparisons weren't updating after downloads
+- ❌ State remained stale until manual refresh
+
+### Root Cause
+
+When we removed `updateSelectedMod()` calls for performance (to avoid expensive CRC32 checks during operations), we also removed the state updates that refresh the UI.
+
+The backups were being created successfully and added to `existingBackupsProvider`, but the mod objects in `modsProvider` still had their old backup references (or null).
+
+### Solution
+
+Added `_refreshBackupInfo()` helper method that efficiently updates affected mods after bulk operations complete:
+
+```dart
+Future<void> _refreshBackupInfo(List<Mod> mods) async {
+  if (mods.isEmpty) return;
+
+  debugPrint('Refreshing backup info for ${mods.length} mods');
+
+  // Update each mod with its current backup from existingBackupsProvider
+  for (final mod in mods) {
+    final backup =
+        ref.read(existingBackupsProvider.notifier).getBackupByMod(mod);
+
+    // Create updated mod with new backup reference
+    final updatedMod = mod.copyWith(backup: backup);
+
+    // Update in state
+    ref.read(modsProvider.notifier).updateMod(updatedMod);
+  }
+
+  debugPrint('Backup info refresh complete');
+}
+```
+
+This method is called **once** after each bulk operation completes:
+- After bulk download (line 74)
+- After bulk backup (line 153)
+- After download & backup (line 236)
+
+### Key Benefits
+
+✅ **Efficient** - Only updates backup references, no expensive CRC32 checks
+✅ **Targeted** - Only updates affected mods, not entire state
+✅ **Fast** - Runs once after operation completes, not per-mod during operation
+✅ **Accurate** - UI immediately reflects new backups and file counts
+
+### Trade-off: During vs After Operation
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Update during operation** (old) | Continuous UI updates | Slow, expensive CRC32 checks |
+| **Update after operation** (new) | Fast operations, clean logs | No UI updates until complete |
+
+We chose the "after" approach because:
+- Users watch progress bars during operations, not individual mod updates
+- Bulk operations complete quickly without per-mod overhead
+- Final state is correct when user returns to browse mods
+
+### Result
+
+After bulk operations complete, the UI now properly shows:
+- 🟢 Green backup icons for successfully backed up mods
+- 🟡 Yellow icons when backup is missing new downloaded files
+- ✅ Updated file counts for backup comparison
+- ✅ Correct state without manual refresh
+
+### Files Modified
+
+**`lib/src/state/bulk_actions/bulk_actions.dart`**
+- Added `_refreshBackupInfo()` helper method (lines 358-377)
+- Called after `downloadAllMods()` completes (line 74)
+- Called after `backupAllMods()` completes (line 153)
+- Called after `downloadAndBackupAllMods()` completes (line 236)

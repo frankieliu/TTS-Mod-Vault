@@ -68,9 +68,10 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
 
       ref.read(modsProvider.notifier).setSelectedMod(mod);
       await ref.read(downloadProvider.notifier).downloadAllFiles(mod);
-      // Skip updateSelectedMod during bulk operations - state will refresh naturally
-      // This avoids expensive backup status recalculation that's not needed during downloads
     }
+
+    // After all downloads complete, refresh backup info to update file count comparison
+    await _refreshBackupInfo(mods);
 
     _resetState();
     ref.read(downloadProvider.notifier).resetState();
@@ -147,8 +148,10 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       await ref
           .read(backupProvider.notifier)
           .createBackup(completeMod, modBackupFolder);
-      // Skip updateSelectedMod after backup - state will refresh naturally
     }
+
+    // After all backups complete, update the affected mods with their new backup info
+    await _refreshBackupInfo(mods);
 
     _resetState();
   }
@@ -228,8 +231,10 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       await ref
           .read(backupProvider.notifier)
           .createBackup(updatedMod, modBackupFolder);
-      // Skip updateSelectedMod after backup - state will refresh naturally
     }
+
+    // After all backups complete, update the affected mods with their new backup info
+    await _refreshBackupInfo(mods);
 
     _resetState();
     ref.read(downloadProvider.notifier).resetState();
@@ -349,5 +354,26 @@ class BulkActionsNotifier extends StateNotifier<BulkActionsState> {
       statusMessage:
           "Cancelling download & backup of all ${ref.read(selectedModTypeProvider).label}s",
     );
+  }
+
+  // Helper method to refresh backup info for mods after bulk operations
+  Future<void> _refreshBackupInfo(List<Mod> mods) async {
+    if (mods.isEmpty) return;
+
+    debugPrint('Refreshing backup info for ${mods.length} mods');
+
+    // Update each mod with its current backup from existingBackupsProvider
+    for (final mod in mods) {
+      final backup =
+          ref.read(existingBackupsProvider.notifier).getBackupByMod(mod);
+
+      // Create updated mod with new backup reference
+      final updatedMod = mod.copyWith(backup: backup);
+
+      // Update in state
+      ref.read(modsProvider.notifier).updateMod(updatedMod);
+    }
+
+    debugPrint('Backup info refresh complete');
   }
 }
